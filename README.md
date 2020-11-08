@@ -4,7 +4,7 @@ Team Members:
 
 Arjuna Anilkumar
 
-Kevin
+Kevin Tchouate Mouofo
 
 Soundarya Na
 
