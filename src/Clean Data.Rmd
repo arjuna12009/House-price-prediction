@@ -5,9 +5,15 @@ date: "11/8/2020"
 output: html_document
 ---
 
-install.packages("Amelia")
+
 
 # Clean data 
+
+### Install packages
+
+```{r}
+install.packages(c("Amelia","purrr","tidyr","ggplot2"))
+```
 
 ### Load data
 
