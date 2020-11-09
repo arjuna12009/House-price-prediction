@@ -1,0 +1,65 @@
+---
+title: "Cleaning data"
+author: "Arjuna Anilkumar, A20446963"
+date: "11/8/2020"
+output: html_document
+---
+
+install.packages("Amelia")
+
+# Clean data 
+
+### Load data
+
+```{r}
+df <- read.table("../data/raw/heart_failure_clinical_records_dataset.csv", sep = ",",header = T)
+head(df)
+primary <- df
+```
+
+### Missing values
+
+```{r}
+library(Amelia)
+misscounts <- sapply(primary,function(x) sum(is.na(x)))
+missmap(primary, main = "Missing values")
+sum(misscounts)
+nrow(primary)
+```
+
+### Factor variables
+
+```{r}
+
+primary$anaemia <- as.factor(primary$anaemia)
+primary$diabetes <- as.factor(primary$diabetes)
+primary$high_blood_pressure <- as.factor(primary$high_blood_pressure)
+primary$sex <- as.factor(primary$sex)
+primary$smoking <- as.factor(primary$smoking)
+primary$DEATH_EVENT <- as.factor(primary$DEATH_EVENT)
+```
+
+# Explore data
+
+### Summarize data
+
+```{r}
+summary(primary)
+```
+
+### Numerical variables histogram
+
+```{r}
+library(purrr)
+library(tidyr)
+library(ggplot2)
+primary %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) + 
+      facet_wrap(~ key, scales = "free") + 
+      geom_histogram(aes(y=..density..), fill = "grey") + 
+      geom_density()
+```
+
+
