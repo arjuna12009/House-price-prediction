@@ -18,39 +18,28 @@ output: pdf_document
 ### Load data
 
 ```{r}
-df <- read.table("../data/raw/heart_failure_clinical_records_dataset.csv", sep = ",",header = T)
+df <- read.table("../data/raw/train.csv", sep = ",",header = T)
 head(df)
-primary <- df
+train_data <- df
 ```
 
 ### Missing values
 
 ```{r}
 library(Amelia)
-misscounts <- sapply(primary,function(x) sum(is.na(x)))
-missmap(primary, main = "Missing values")
+misscounts <- sapply(train_data,function(x) sum(is.na(x)))
+missmap(train_data, main = "Missing values")
 sum(misscounts)
-nrow(primary)
+dim(train_data)
 ```
 
-### Factor variables
-
-```{r}
-
-primary$anaemia <- as.factor(primary$anaemia)
-primary$diabetes <- as.factor(primary$diabetes)
-primary$high_blood_pressure <- as.factor(primary$high_blood_pressure)
-primary$sex <- as.factor(primary$sex)
-primary$smoking <- as.factor(primary$smoking)
-primary$DEATH_EVENT <- as.factor(primary$DEATH_EVENT)
-```
 
 # Explore data
 
 ### Summarize data
 
 ```{r}
-summary(primary)
+summary(train_data)
 ```
 
 ### Numerical variables histogram
@@ -59,7 +48,7 @@ summary(primary)
 library(purrr)
 library(tidyr)
 library(ggplot2)
-primary %>%
+train_data %>%
   keep(is.numeric) %>% 
   gather() %>% 
   ggplot(aes(value)) + 
