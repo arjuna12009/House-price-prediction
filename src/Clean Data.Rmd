@@ -2,7 +2,7 @@
 title: "Cleaning data"
 author: "Arjuna Anilkumar, A20446963"
 date: "11/8/2020"
-output: html_document
+output: pdf_document
 ---
 
 
