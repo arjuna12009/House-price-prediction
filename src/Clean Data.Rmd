@@ -12,7 +12,7 @@ output: html_document
 ### Install packages
 
 ```{r}
-install.packages(c("Amelia","purrr","tidyr","ggplot2"))
+#install.packages(c("Amelia","purrr","tidyr","ggplot2"))
 ```
 
 ### Load data
