@@ -20,7 +20,10 @@ output: pdf_document
 ```{r}
 df <- read.table("../data/raw/train.csv", sep = ",",header = T)
 head(df)
+df2 <- read.table("../data/raw/test.csv", sep = ",",header = T)
+head(df2)
 train_data <- df
+test_data <- df2
 ```
 
 ### Missing values
@@ -31,6 +34,11 @@ misscounts <- sapply(train_data,function(x) sum(is.na(x)))
 missmap(train_data, main = "Missing values")
 sum(misscounts)
 dim(train_data)
+
+misscounts <- sapply(test_data,function(x) sum(is.na(x)))
+missmap(test_data, main = "Missing values")
+sum(misscounts)
+dim(test_data)
 ```
 
 
@@ -40,6 +48,11 @@ dim(train_data)
 
 ```{r}
 summary(train_data)
+```
+
+```{r}
+summary(as.factor(train_data$MSZoning))
+summary(as.factor(test_data$MSZoning))
 ```
 
 ### Numerical variables histogram
