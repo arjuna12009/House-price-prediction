@@ -3,71 +3,499 @@ title: "Cleaning data"
 author: "Arjuna Anilkumar, A20446963"
 date: "11/8/2020"
 output: pdf_document
+geometry: margin= 1cm
 ---
 
 
+# Introduction 
 
-# Clean data 
+This project aims to predict the final price of houses using the Ames housing dataset.
 
-### Install packages
+# Data description
+
+The Ames Housing dataset was compiled by Dean De Cock for use in data science education. It's an alternative to the Boston Housing dataset and is for data scientists looking for a modernized and expanded version of the often cited Boston Housing dataset.
+
+The Ames housing data contains With 79 explanatory variables describing (almost) every aspect of residential homes in Ames, Iowa.
+
+# Data Processing 
+
+
+
+## Install packages
 
 ```{r}
-#install.packages(c("Amelia","purrr","tidyr","ggplot2"))
+#install.packages(c("Amelia","purrr","tidyr","ggplot2","rpart","plyr"))
 ```
 
-### Load data
+## Load data
 
 ```{r}
 df <- read.table("../data/raw/train.csv", sep = ",",header = T)
 head(df)
 df2 <- read.table("../data/raw/test.csv", sep = ",",header = T)
 head(df2)
-train_data <- df
-test_data <- df2
+train <- df
+test <- df2
+str(train)
+str(test)
 ```
 
-### Missing values
+## Combine data
+
+Combining data so we can clean and analyze the entire dataset simultaneously.
+
+```{r}
+test$SalePrice <- rep(NA, 1459) # adding NA's to test data sales price so we can join train and test data into one dataset.
+combined <- rbind(train,test)
+str(combined)
+```
+
+## Missing values and label encoding
 
 ```{r}
 library(Amelia)
-misscounts <- sapply(train_data,function(x) sum(is.na(x)))
-missmap(train_data, main = "Missing values")
-sum(misscounts)
-dim(train_data)
-
-misscounts <- sapply(test_data,function(x) sum(is.na(x)))
-missmap(test_data, main = "Missing values")
-sum(misscounts)
-dim(test_data)
-```
-
-
-# Explore data
-
-### Summarize data
-
-```{r}
-summary(train_data)
+misscounts <- sapply(combined,function(x) sum(is.na(x)))
+missmap(combined, main = "Missing values")
 ```
 
 ```{r}
-summary(as.factor(train_data$MSZoning))
-summary(as.factor(test_data$MSZoning))
+sort(colSums(sapply(combined, is.na)), decreasing = T)
 ```
 
-### Numerical variables histogram
+### pool variables
+
+The PoolQC has the most missing values. Pool area does not have missing values but it is related to PoolQC as it does not make sense to have a pool quality data when there is zero pool area or no pool. Its description from the data description document is.
+
+PoolQC: Pool quality
+		
+       Ex	Excellent
+       Gd	Good
+       TA	Average/Typical
+       Fa	Fair
+       NA	No Pool
+
+Since a house with no pool has NA they are not really missing values.
+we can check with other pool related variables to see if there are any actual missing values in our data.
 
 ```{r}
-library(purrr)
-library(tidyr)
+table(is.na(combined$PoolQC))
+table(combined$PoolArea, combined$PoolQC, useNA = 'ifany')
+```
+
+Here we have some actual missing values. We have 13 houses with pool area data but we have only 10 PoolQC data available. 
+
+
+```{r}
+library(plyr)
+combined[combined$PoolArea==0,]$PoolQC <- "None"
+
+# convert all NA's in PoolQC to none except for the 3 actual missing values.
+
+combined[is.na(combined$PoolQC),c("OverallQual","PoolArea")]
+
+# imputing the values of poolQC according to overall quality and pool area.
+
+combined[is.na(combined$PoolQC),"PoolQC"] <- c("TA","Gd","TA")
+
+# label encoding as the values are ordinal.
+
+encoding_levels <- c('None' = 0, 'Po' = 1, 'Fa' = 2, 'TA' = 3, 'Gd' = 4, 'Ex' = 5)
+
+combined$PoolQC <- as.integer(plyr::revalue(combined$PoolQC,encoding_levels))
+
+table(combined$PoolQC)
+str(as.factor(combined$PoolQC))
+```
+
+### MiscFeature variable 
+
+```{r}
+table(combined$MiscFeature, useNA = "ifany")
+```
+
+In MiscFeature variable, there are 2814 missing values that have to be replaced by none.
+
+```{r}
 library(ggplot2)
-train_data %>%
-  keep(is.numeric) %>% 
-  gather() %>% 
-  ggplot(aes(value)) + 
-      facet_wrap(~ key, scales = "free") + 
-      geom_histogram(aes(y=..density..), fill = "grey") + 
-      geom_density()
+
+# convert all NA's in MiscFeature to none.
+combined[is.na(combined$MiscFeature),"MiscFeature"] <- "None"
+
+# convert to factor
+combined$MiscFeature <- as.factor(combined$MiscFeature)
+
+ggplot(combined, aes(x=MiscFeature, y = SalePrice)) + geom_bar(stat = 'summary')
 ```
 
+### Alley Predictor
+
+```{r}
+table(combined$Alley, useNA = "ifany")
+```
+
+```{r}
+# convert all NA's in Alley to none.
+combined[is.na(combined$Alley),"Alley"] <- "None"
+
+# convert to factor
+combined$Alley <- as.factor(combined$Alley)
+
+ggplot(combined, aes(x=Alley, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### Fence predictor
+
+
+```{r}
+table(combined$Fence, useNA = "ifany")
+```
+
+```{r}
+# convert all NA's in Fence to none.
+combined[is.na(combined$Fence),"Fence"] <- "None"
+
+# convert to factor
+combined$Fence <- as.factor(combined$Fence)
+
+ggplot(combined, aes(x=Fence, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### Fireplace variables
+
+Fireplace quality
+
+```{r}
+table(combined$FireplaceQu, useNA = "ifany")
+```
+
+```{r}
+# convert all NA's in FireplaceQu to none.
+
+combined[is.na(combined$FireplaceQu),"FireplaceQu"] <- "None"
+
+# Changing and converting to factor levels from character.
+
+combined$FireplaceQu <- as.integer(plyr::revalue(combined$FireplaceQu,encoding_levels))
+
+table(combined$FireplaceQu)
+str(combined$FireplaceQu)
+anyNA(combined$FireplaceQu)
+```
+
+### Lot variables
+
+LotFrontage
+LotShape
+LotConfig
+LotArea
+
+```{r}
+table(is.na(combined$LotFrontage))
+```
+
+Here we have 486 missing values which cannot be replaced by none as it is a numerical variable. So we predict using rpart.
+
+http://r-statistics.co/Missing-Value-Treatment-With-R.html
+
+```{r}
+# predictors that lotfrontage variable might depend on.
+predictors <- c("MSSubClass", "MSZoning", "LotFrontage", "LotArea", "Street", "Alley", "LotShape", "LandContour", "LotConfig", "LandSlope", "BldgType", "HouseStyle", "YrSold", "SaleType", "SaleCondition")
+library(rpart)
+mod <- rpart(LotFrontage~., data = combined[!is.na(combined$LotFrontage),predictors], method = "anova", na.action = na.omit)
+
+pred <- predict(mod, combined[is.na(combined$LotFrontage),predictors])
+pred <- round(pred)
+combined$LotFrontage[is.na(combined$LotFrontage)] <- pred
+anyNA(combined$LotFrontage)
+```
+
+```{r}
+table(combined$LotShape)
+combined$LotShape <- as.integer(plyr::revalue(combined$LotShape,c("Reg" = 3, "IR1" = 2, "IR2" = 1, "IR3" = 0 )))
+table(combined$LotConfig)
+combined$LotConfig <- as.factor(combined$LotConfig)
+```
+
+```{r}
+sort(colSums(sapply(combined, is.na)), decreasing = T)
+```
+
+###  Garage variables 
+
+GarageYrBlt
+GarageType
+GarageFinish,
+GarageQual,
+GarageCond,
+GarageCars,
+GarageArea
+
+```{r}
+garage <- c("GarageYrBlt","GarageType","GarageFinish","GarageQual","GarageCond","GarageCars","GarageArea")
+sort(colSums(sapply(combined[,garage], is.na)), decreasing = T)
+
+```
+
+```{r}
+combined$GarageYrBlt[is.na(combined$GarageYrBlt)] <- combined$YearBuilt[is.na(combined$GarageYrBlt)]
+
+which(!is.na(combined$GarageType) & is.na(combined$GarageFinish) & is.na(combined$GarageCond) & is.na(combined$GarageQual))
+
+combined[c(2127,2577),c("GarageType","GarageFinish","GarageCond","GarageQual","GarageCars","GarageArea")]
+
+# impute mode
+combined[c(2127),"GarageFinish"] <- names(sort(-table(combined$GarageFinish)))[1]
+combined[c(2127),"GarageCond"] <- names(sort(-table(combined$GarageCond)))[1]
+combined[c(2127),"GarageQual"] <- names(sort(-table(combined$GarageQual)))[1]
+
+combined[c(2577),"GarageFinish"] <- "None"
+combined[c(2577),"GarageCond"] <- "None"
+combined[c(2577),"GarageQual"] <- "None"
+combined[c(2577),"GarageType"] <- "None"
+combined[c(2577),"GarageCars"] <- 0
+combined[c(2577),"GarageArea"] <- 0
+
+which(!is.na(combined$GarageType) & is.na(combined$GarageFinish) & is.na(combined$GarageCond) & is.na(combined$GarageQual))
+
+combined$GarageType[is.na(combined$GarageType)] <- "None"
+combined$GarageFinish[is.na(combined$GarageFinish)] <- "None"
+combined$GarageCond[is.na(combined$GarageCond)] <- "None"
+combined$GarageQual[is.na(combined$GarageQual)] <- "None"
+sort(colSums(sapply(combined[,garage], is.na)), decreasing = T)
+
+# convert into factor
+combined$GarageType <- as.factor(combined$GarageType)
+table(combined$GarageType)
+
+# convert into ordinal
+Finish <- c('None'=0, 'Unf'=1, 'RFn'=2, 'Fin'=3)
+combined$GarageFinish<-as.integer(revalue(combined$GarageFinish, Finish))
+table(combined$GarageFinish)
+
+combined$GarageCond<-as.integer(revalue(combined$GarageCond, encoding_levels))
+table(combined$GarageCond)
+
+combined$GarageQual<-as.integer(revalue(combined$GarageQual, encoding_levels))
+table(combined$GarageQual)
+
+```
+
+### Basement variables
+
+there are 11 basement variables
+
+BsmtQual,
+BsmtCond,
+BsmtExposure,
+BsmtFinType1,
+BsmtFinType2,
+BsmtFullBath,
+BsmtHalfBath,
+BsmtFinSF1,
+BsmtFinSF2,
+BsmtUnfSF,
+TotalBsmtSF,
+
+```{r}
+basement <- c("BsmtQual","BsmtCond","BsmtExposure","BsmtFinType1","BsmtFinType2","BsmtFullBath","BsmtHalfBath","BsmtFinSF1","BsmtFinSF2","BsmtUnfSF","TotalBsmtSF")
+sort(colSums(sapply(combined[,basement], is.na)), decreasing = T)
+
+```
+
+```{r}
+x <- which(!is.na(combined$BsmtFinType1) & (is.na(combined$BsmtCond)|is.na(combined$BsmtExposure)|is.na(combined$BsmtQual)|is.na(combined$BsmtFinType2)))
+
+combined[x,basement]
+
+# impute mode
+combined[c(2218,2219),"BsmtQual"] <- names(sort(-table(combined$BsmtQual)))[1]
+combined[c(2041,2186,2525),"BsmtCond"] <- names(sort(-table(combined$BsmtCond)))[1]
+combined[c(949,1488,2349),"BsmtExposure"] <- names(sort(-table(combined$BsmtExposure)))[1]
+combined[c(333),"BsmtFinType2"] <- names(sort(-table(combined$BsmtFinType2)))[1]
+combined[x,basement]
+anyNA(combined[x,basement])
+sort(colSums(sapply(combined[,basement], is.na)), decreasing = T)
+
+combined[is.na(combined[,"TotalBsmtSF"]),basement]
+
+combined[2121,"BsmtQual"]  <- "None"
+combined[2121,"BsmtCond"]  <- "None"
+combined[2121,"BsmtExposure"]  <- "None"
+combined[2121,"BsmtFinType1"]  <- "None"
+combined[2121,"BsmtFinType2"]  <- "None"
+combined[2121,"BsmtFullBath"]  <- 0
+combined[2121,"BsmtHalfBath"]  <- 0
+combined[2121,"BsmtFinSF1"]  <- 0
+combined[2121,"BsmtFinSF2"]  <- 0
+combined[2121,"BsmtUnfSF"]  <- 0
+combined[2121,"TotalBsmtSF"]  <- 0
+
+sort(colSums(sapply(combined[,basement], is.na)), decreasing = T)
+
+combined[is.na(combined[,"BsmtHalfBath"]),basement]
+
+combined$BsmtQual[is.na(combined$BsmtQual)] <- "None"
+combined$BsmtCond[is.na(combined$BsmtCond)] <- "None"
+combined$BsmtExposure[is.na(combined$BsmtExposure)] <- "None"
+combined$BsmtFinType1[is.na(combined$BsmtFinType1)] <- "None"
+combined$BsmtFinType2[is.na(combined$BsmtFinType2)] <- "None"
+combined$BsmtFullBath[is.na(combined$BsmtFullBath)] <- 0
+combined$BsmtHalfBath[is.na(combined$BsmtHalfBath)] <- 0
+
+sort(colSums(sapply(combined[,basement], is.na)), decreasing = T)
+
+# convert to ordinal
+
+combined$BsmtQual<-as.integer(revalue(combined$BsmtQual, encoding_levels))
+table(combined$BsmtQual)
+combined$BsmtCond<-as.integer(revalue(combined$BsmtCond, encoding_levels))
+table(combined$BsmtCond)
+exposure <- c('Gd' = 4,'Av' = 3,'Mn' = 2,'No' = 1,'None' = 0)
+combined$BsmtExposure<-as.integer(revalue(combined$BsmtExposure, exposure))
+table(combined$BsmtExposure)
+rating <- c('GLQ' = 6,'ALQ' = 5,'BLQ' = 4,'Rec' = 3,'LwQ' = 2,'Unf' = 1,'None' = 0)
+combined$BsmtFinType1<-as.integer(revalue(combined$BsmtFinType1, rating))
+table(combined$BsmtFinType1)
+combined$BsmtFinType2<-as.integer(revalue(combined$BsmtFinType2, rating))
+table(combined$BsmtFinType2)
+```
+
+### masonry variables
+```{r}
+sort(colSums(sapply(combined, is.na)), decreasing = T)
+x <- which(!is.na(combined$MasVnrArea) & is.na(combined$MasVnrType) )
+combined[x,c("MasVnrArea","MasVnrType")]
+combined[2611,"MasVnrType"] <- names(sort(-table(combined$MasVnrType)))[1]
+combined$MasVnrType[is.na(combined$MasVnrType)] <- "None"
+combined$MasVnrArea[is.na(combined$MasVnrArea)] <- 0
+combined$MasVnrType <- as.factor(combined$MasVnrType)
+table(combined$MasVnrType)
+```
+
+### catogorical variables
+
+Below are categorical variables identified from data description:
+
+GarageType
+MSZoning,
+Exterior1st,
+Exterior2nd,
+Electrical,
+SaleType,
+SaleCondition,
+Foundation,
+Heating,
+CentralAir,
+RoofStyle,
+RoofMatl,
+LandContour,
+BldgType,
+HouseStyle,
+Neighborhood,
+Condition1,
+Condition2,
+Street,
+MSSubClass,
+MoSold,
+YrSold
+
+```{r}
+sort(colSums(sapply(combined, is.na)), decreasing = T)
+```
+
+```{r}
+categorical_variables <- c('GarageType',"MSZoning","Utilities","Exterior1st","Exterior2nd","Electrical","SaleType","SaleCondition","Foundation","Heating","CentralAir","RoofStyle","RoofMatl","LandContour","BldgType","HouseStyle","Neighborhood","Condition1","Condition2","Street","MSSubClass","MoSold","YrSold")
+
+table(combined$MSZoning, useNA = "ifany")
+combined$MSZoning[is.na(combined$MSZoning)] <- names(sort(-table(combined$MSZoning)))[1]
+combined$MSZoning <- as.factor(combined$MSZoning)
+
+table(combined$Utilities, useNA = "ifany")
+combined$Utilities[is.na(combined$Utilities)] <- names(sort(-table(combined$Utilities)))[1]
+combined$Utilities <- as.factor(combined$Utilities)
+
+table(combined$Exterior1st, useNA = "ifany")
+combined$Exterior1st[is.na(combined$Exterior1st)] <-
+names(sort(-table(combined$Exterior1st)))[1]
+combined$Exterior1st <- as.factor(combined$Exterior1st)
+
+table(combined$Exterior2nd, useNA = "ifany")
+combined$Exterior2nd[is.na(combined$Exterior2nd)] <-
+names(sort(-table(combined$Exterior2nd)))[1]
+combined$Exterior2nd <- as.factor(combined$Exterior2nd)
+
+table(combined$Electrical, useNA = "ifany")
+combined$Electrical[is.na(combined$Electrical)] <-
+names(sort(-table(combined$Electrical)))[1]
+combined$Electrical <- as.factor(combined$Electrical)
+
+table(combined$SaleType, useNA = "ifany")
+combined$SaleType[is.na(combined$SaleType)] <-
+names(sort(-table(combined$SaleType)))[1]
+combined$SaleType <- as.factor(combined$SaleType)
+
+x <- sort(colSums(sapply(combined[,categorical_variables], is.na)), decreasing = T)
+x
+
+for(i in 1:length(names(x)))
+{
+        combined[,names(x)[i]] <- as.factor(combined[,names(x)[i]])
+}
+
+str(combined[,categorical_variables])
+
+```
+
+```{r}
+sort(colSums(sapply(combined, is.na)), decreasing = T)
+```
+
+### Ordinal variables
+
+Below are ordinal variables identified from data description:
+
+```{r}
+
+combined[is.na(combined$Functional),"Functional"] <- names(sort(-table(combined$Functional)))[1]
+functionality <- c('Sal'=0, 'Sev'=1, 'Maj2'=2, 'Maj1'=3, 'Mod'=4, 'Min2'=5, 'Min1'=6, 'Typ'=7)
+combined$Functional <- as.integer(revalue(combined$Functional,functionality))
+
+combined[is.na(combined$KitchenQual),"KitchenQual"] <- names(sort(-table(combined$KitchenQual)))[1]
+combined$KitchenQual <- as.integer(revalue(combined$KitchenQual,encoding_levels))
+```
+
+```{r}
+sort(colSums(sapply(combined, is.na)), decreasing = T)
+```
+
+```{r}
+char_columns <- names(combined[,sapply(combined, is.character)])
+char_columns
+```
+
+```{r}
+#label encode remaining char variables
+combined$LandSlope <- as.integer(revalue(combined$LandSlope,c('Gtl' = 2,'Mod' = 1,'Sev' = 0)))
+combined$ExterQual <- as.integer(revalue(combined$ExterQual,encoding_levels))
+combined$ExterCond <- as.integer(revalue(combined$ExterCond,encoding_levels))
+combined$HeatingQC <- as.integer(revalue(combined$HeatingQC,encoding_levels))
+combined$PavedDrive <- as.integer(revalue(combined$PavedDrive,c('Y'=2,'P'=1,'N'=0)))
+```
+
+```{r}
+misscounts <- sapply(combined,function(x) sum(is.na(x)))
+missmap(combined, main = "Missing values")
+```
+
+As we can see there are no missing values except in SalePrice as this indicates the obeservations for test data.
+
+```{r}
+num_vars <- which(sapply(combined,is.numeric))
+factor_vars <- which(sapply(combined,is.factor))
+cat('numeric variables: ', length(num_vars),' and categorical variables: ',length(factor_vars),'\n')
+str(combined)
+```
+
+
+# EDA
 
