@@ -99,12 +99,12 @@ combined[is.na(combined$PoolQC),"PoolQC"] <- c("TA","Gd","TA")
 
 # label encoding as the values are ordinal.
 
-encoding_levels <- c('None' = 0, 'Po' = 1, 'Fa' = 2, 'TA' = 3, 'Gd' = 4, 'Ex' = 5)
+encoding_levels <- c('None', 'Po' , 'Fa', 'TA' , 'Gd', 'Ex' )
 
-combined$PoolQC <- as.integer(plyr::revalue(combined$PoolQC,encoding_levels))
+combined$PoolQC <- factor(combined$PoolQC, order = TRUE, levels = encoding_levels)
 
 table(combined$PoolQC)
-str(as.factor(combined$PoolQC))
+str(combined$PoolQC)
 ```
 
 ### MiscFeature variable 
@@ -175,9 +175,10 @@ combined[is.na(combined$FireplaceQu),"FireplaceQu"] <- "None"
 
 # Changing and converting to factor levels from character.
 
-combined$FireplaceQu <- as.integer(plyr::revalue(combined$FireplaceQu,encoding_levels))
 
-table(combined$FireplaceQu)
+combined$FireplaceQu <- factor(combined$FireplaceQu, order = TRUE, levels = encoding_levels)
+
+table(combined$FireplaceQu, useNA = "ifany")
 str(combined$FireplaceQu)
 anyNA(combined$FireplaceQu)
 ```
@@ -210,9 +211,10 @@ anyNA(combined$LotFrontage)
 ```
 
 ```{r}
-table(combined$LotShape)
-combined$LotShape <- as.integer(plyr::revalue(combined$LotShape,c("Reg" = 3, "IR1" = 2, "IR2" = 1, "IR3" = 0 )))
-table(combined$LotConfig)
+table(combined$LotShape, useNA = "ifany")
+
+combined$LotShape <- factor(combined$LotShape, order = TRUE, levels = c("IR3" , "IR2" , "IR1" , "Reg" ))
+table(combined$LotConfig, useNA = "ifany")
 combined$LotConfig <- as.factor(combined$LotConfig)
 ```
 
@@ -268,15 +270,17 @@ combined$GarageType <- as.factor(combined$GarageType)
 table(combined$GarageType)
 
 # convert into ordinal
-Finish <- c('None'=0, 'Unf'=1, 'RFn'=2, 'Fin'=3)
-combined$GarageFinish<-as.integer(revalue(combined$GarageFinish, Finish))
-table(combined$GarageFinish)
+Finish <- c('None', 'Unf', 'RFn', 'Fin')
 
-combined$GarageCond<-as.integer(revalue(combined$GarageCond, encoding_levels))
-table(combined$GarageCond)
 
-combined$GarageQual<-as.integer(revalue(combined$GarageQual, encoding_levels))
-table(combined$GarageQual)
+combined$GarageFinish<-factor(combined$GarageFinish, order = TRUE, levels = Finish)
+table(combined$GarageFinish, useNA = 'ifany')
+
+combined$GarageCond<-factor(combined$GarageCond, order = TRUE, levels = encoding_levels)
+table(combined$GarageCond, useNA = "ifany")
+
+combined$GarageQual<-factor(combined$GarageQual, order = TRUE, levels = encoding_levels)
+table(combined$GarageQual, useNA = "ifany")
 
 ```
 
@@ -330,8 +334,6 @@ combined[2121,"BsmtFinSF2"]  <- 0
 combined[2121,"BsmtUnfSF"]  <- 0
 combined[2121,"TotalBsmtSF"]  <- 0
 
-sort(colSums(sapply(combined[,basement], is.na)), decreasing = T)
-
 combined[is.na(combined[,"BsmtHalfBath"]),basement]
 
 combined$BsmtQual[is.na(combined$BsmtQual)] <- "None"
@@ -346,18 +348,18 @@ sort(colSums(sapply(combined[,basement], is.na)), decreasing = T)
 
 # convert to ordinal
 
-combined$BsmtQual<-as.integer(revalue(combined$BsmtQual, encoding_levels))
-table(combined$BsmtQual)
-combined$BsmtCond<-as.integer(revalue(combined$BsmtCond, encoding_levels))
-table(combined$BsmtCond)
-exposure <- c('Gd' = 4,'Av' = 3,'Mn' = 2,'No' = 1,'None' = 0)
-combined$BsmtExposure<-as.integer(revalue(combined$BsmtExposure, exposure))
-table(combined$BsmtExposure)
-rating <- c('GLQ' = 6,'ALQ' = 5,'BLQ' = 4,'Rec' = 3,'LwQ' = 2,'Unf' = 1,'None' = 0)
-combined$BsmtFinType1<-as.integer(revalue(combined$BsmtFinType1, rating))
-table(combined$BsmtFinType1)
-combined$BsmtFinType2<-as.integer(revalue(combined$BsmtFinType2, rating))
-table(combined$BsmtFinType2)
+combined$BsmtQual<-factor(combined$BsmtQual, order = TRUE, levels = encoding_levels)
+table(combined$BsmtQual, useNA = "ifany")
+combined$BsmtCond<-factor(combined$BsmtCond, order = TRUE, levels = encoding_levels)
+table(combined$BsmtCond, useNA = "ifany")
+exposure <- c('None','No','Mn','Av','Gd')
+combined$BsmtExposure<-factor(combined$BsmtExposure, order = TRUE, levels = exposure)
+table(combined$BsmtExposure, useNA = "ifany")
+rating <- c('None','Unf','LwQ','Rec','BLQ','ALQ','GLQ')
+combined$BsmtFinType1<-factor(combined$BsmtFinType1, order = TRUE, levels = rating)
+table(combined$BsmtFinType1, useNA = "ifany")
+combined$BsmtFinType2<-factor(combined$BsmtFinType2, order = TRUE, levels = rating)
+table(combined$BsmtFinType2, useNA = "ifany")
 ```
 
 ### masonry variables
@@ -457,11 +459,11 @@ Below are ordinal variables identified from data description:
 ```{r}
 
 combined[is.na(combined$Functional),"Functional"] <- names(sort(-table(combined$Functional)))[1]
-functionality <- c('Sal'=0, 'Sev'=1, 'Maj2'=2, 'Maj1'=3, 'Mod'=4, 'Min2'=5, 'Min1'=6, 'Typ'=7)
-combined$Functional <- as.integer(revalue(combined$Functional,functionality))
+functionality <- c('Sal', 'Sev', 'Maj2', 'Maj1', 'Mod', 'Min2', 'Min1', 'Typ')
+combined$Functional <- factor(combined$Functional, order = TRUE, levels = functionality)
 
 combined[is.na(combined$KitchenQual),"KitchenQual"] <- names(sort(-table(combined$KitchenQual)))[1]
-combined$KitchenQual <- as.integer(revalue(combined$KitchenQual,encoding_levels))
+combined$KitchenQual <- factor(combined$KitchenQual, order = TRUE, levels = encoding_levels)
 ```
 
 ```{r}
@@ -474,17 +476,20 @@ char_columns
 ```
 
 ```{r}
-#label encode remaining char variables
-combined$LandSlope <- as.integer(revalue(combined$LandSlope,c('Gtl' = 2,'Mod' = 1,'Sev' = 0)))
-combined$ExterQual <- as.integer(revalue(combined$ExterQual,encoding_levels))
-combined$ExterCond <- as.integer(revalue(combined$ExterCond,encoding_levels))
-combined$HeatingQC <- as.integer(revalue(combined$HeatingQC,encoding_levels))
-combined$PavedDrive <- as.integer(revalue(combined$PavedDrive,c('Y'=2,'P'=1,'N'=0)))
+# convert remaining character variables into categorical
+
+combined$LandSlope <- factor(combined$LandSlope, order = TRUE, levels = c('Sev','Mod','Gtl'))
+combined$ExterQual <- factor(combined$ExterQual, order = TRUE, levels = encoding_levels)
+combined$ExterCond <- factor(combined$ExterCond, order = TRUE, levels = encoding_levels)
+combined$HeatingQC <- factor(combined$HeatingQC, order = TRUE, levels = encoding_levels)
+combined$PavedDrive <- factor(combined$PavedDrive, order = TRUE, levels = c('N','P','Y'))
 ```
 
 ```{r}
 misscounts <- sapply(combined,function(x) sum(is.na(x)))
 missmap(combined, main = "Missing values")
+
+anyNA(combined[,!names(combined) %in% c("SalePrice")])
 ```
 
 As we can see there are no missing values except in SalePrice as this indicates the obeservations for test data.
@@ -499,3 +504,6 @@ str(combined)
 
 # EDA
 
+```{r}
+
+```
