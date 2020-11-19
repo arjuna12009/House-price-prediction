@@ -32,25 +32,14 @@ The Ames housing data contains With 79 explanatory variables describing (almost)
 ```{r}
 df <- read.table("../data/raw/train.csv", sep = ",",header = T)
 head(df)
-df2 <- read.table("../data/raw/test.csv", sep = ",",header = T)
-head(df2)
-train <- df
-test <- df2
-str(train)
-str(test)
-```
+combined <- df
 
-## Combine data
-
-Combining data so we can clean and analyze the entire dataset simultaneously.
-
-```{r}
-test$SalePrice <- rep(NA, 1459) # adding NA's to test data sales price so we can join train and test data into one dataset.
-combined <- rbind(train,test)
 str(combined)
+
 ```
 
-## Missing values and label encoding
+
+## Missing values
 
 ```{r}
 library(Amelia)
@@ -113,7 +102,7 @@ str(combined$PoolQC)
 table(combined$MiscFeature, useNA = "ifany")
 ```
 
-In MiscFeature variable, there are 2814 missing values that have to be replaced by none.
+In MiscFeature variable, there are 1406 missing values that have to be replaced by none.
 
 ```{r}
 library(ggplot2)
@@ -194,7 +183,7 @@ LotArea
 table(is.na(combined$LotFrontage))
 ```
 
-Here we have 486 missing values which cannot be replaced by none as it is a numerical variable. So we predict using rpart.
+Here we have 259 missing values which cannot be replaced by none as it is a numerical variable. So we predict using rpart.
 
 http://r-statistics.co/Missing-Value-Treatment-With-R.html
 
@@ -241,30 +230,15 @@ sort(colSums(sapply(combined[,garage], is.na)), decreasing = T)
 ```{r}
 combined$GarageYrBlt[is.na(combined$GarageYrBlt)] <- combined$YearBuilt[is.na(combined$GarageYrBlt)]
 
-which(!is.na(combined$GarageType) & is.na(combined$GarageFinish) & is.na(combined$GarageCond) & is.na(combined$GarageQual))
-
-combined[c(2127,2577),c("GarageType","GarageFinish","GarageCond","GarageQual","GarageCars","GarageArea")]
-
-# impute mode
-combined[c(2127),"GarageFinish"] <- names(sort(-table(combined$GarageFinish)))[1]
-combined[c(2127),"GarageCond"] <- names(sort(-table(combined$GarageCond)))[1]
-combined[c(2127),"GarageQual"] <- names(sort(-table(combined$GarageQual)))[1]
-
-combined[c(2577),"GarageFinish"] <- "None"
-combined[c(2577),"GarageCond"] <- "None"
-combined[c(2577),"GarageQual"] <- "None"
-combined[c(2577),"GarageType"] <- "None"
-combined[c(2577),"GarageCars"] <- 0
-combined[c(2577),"GarageArea"] <- 0
-
-which(!is.na(combined$GarageType) & is.na(combined$GarageFinish) & is.na(combined$GarageCond) & is.na(combined$GarageQual))
-
 combined$GarageType[is.na(combined$GarageType)] <- "None"
 combined$GarageFinish[is.na(combined$GarageFinish)] <- "None"
 combined$GarageCond[is.na(combined$GarageCond)] <- "None"
 combined$GarageQual[is.na(combined$GarageQual)] <- "None"
 sort(colSums(sapply(combined[,garage], is.na)), decreasing = T)
+```
 
+
+```{r}
 # convert into factor
 combined$GarageType <- as.factor(combined$GarageType)
 table(combined$GarageType)
@@ -312,30 +286,14 @@ x <- which(!is.na(combined$BsmtFinType1) & (is.na(combined$BsmtCond)|is.na(combi
 combined[x,basement]
 
 # impute mode
-combined[c(2218,2219),"BsmtQual"] <- names(sort(-table(combined$BsmtQual)))[1]
-combined[c(2041,2186,2525),"BsmtCond"] <- names(sort(-table(combined$BsmtCond)))[1]
-combined[c(949,1488,2349),"BsmtExposure"] <- names(sort(-table(combined$BsmtExposure)))[1]
+combined[c(949),"BsmtExposure"] <- names(sort(-table(combined$BsmtExposure)))[1]
 combined[c(333),"BsmtFinType2"] <- names(sort(-table(combined$BsmtFinType2)))[1]
 combined[x,basement]
 anyNA(combined[x,basement])
 sort(colSums(sapply(combined[,basement], is.na)), decreasing = T)
+```
 
-combined[is.na(combined[,"TotalBsmtSF"]),basement]
-
-combined[2121,"BsmtQual"]  <- "None"
-combined[2121,"BsmtCond"]  <- "None"
-combined[2121,"BsmtExposure"]  <- "None"
-combined[2121,"BsmtFinType1"]  <- "None"
-combined[2121,"BsmtFinType2"]  <- "None"
-combined[2121,"BsmtFullBath"]  <- 0
-combined[2121,"BsmtHalfBath"]  <- 0
-combined[2121,"BsmtFinSF1"]  <- 0
-combined[2121,"BsmtFinSF2"]  <- 0
-combined[2121,"BsmtUnfSF"]  <- 0
-combined[2121,"TotalBsmtSF"]  <- 0
-
-combined[is.na(combined[,"BsmtHalfBath"]),basement]
-
+```{r}
 combined$BsmtQual[is.na(combined$BsmtQual)] <- "None"
 combined$BsmtCond[is.na(combined$BsmtCond)] <- "None"
 combined$BsmtExposure[is.na(combined$BsmtExposure)] <- "None"
@@ -345,7 +303,9 @@ combined$BsmtFullBath[is.na(combined$BsmtFullBath)] <- 0
 combined$BsmtHalfBath[is.na(combined$BsmtHalfBath)] <- 0
 
 sort(colSums(sapply(combined[,basement], is.na)), decreasing = T)
+```
 
+```{r}
 # convert to ordinal
 
 combined$BsmtQual<-factor(combined$BsmtQual, order = TRUE, levels = encoding_levels)
@@ -365,9 +325,6 @@ table(combined$BsmtFinType2, useNA = "ifany")
 ### masonry variables
 ```{r}
 sort(colSums(sapply(combined, is.na)), decreasing = T)
-x <- which(!is.na(combined$MasVnrArea) & is.na(combined$MasVnrType) )
-combined[x,c("MasVnrArea","MasVnrType")]
-combined[2611,"MasVnrType"] <- names(sort(-table(combined$MasVnrType)))[1]
 combined$MasVnrType[is.na(combined$MasVnrType)] <- "None"
 combined$MasVnrArea[is.na(combined$MasVnrArea)] <- 0
 combined$MasVnrType <- as.factor(combined$MasVnrType)
@@ -408,33 +365,12 @@ sort(colSums(sapply(combined, is.na)), decreasing = T)
 ```{r}
 categorical_variables <- c('GarageType',"MSZoning","Utilities","Exterior1st","Exterior2nd","Electrical","SaleType","SaleCondition","Foundation","Heating","CentralAir","RoofStyle","RoofMatl","LandContour","BldgType","HouseStyle","Neighborhood","Condition1","Condition2","Street","MSSubClass","MoSold","YrSold")
 
-table(combined$MSZoning, useNA = "ifany")
-combined$MSZoning[is.na(combined$MSZoning)] <- names(sort(-table(combined$MSZoning)))[1]
-combined$MSZoning <- as.factor(combined$MSZoning)
-
-table(combined$Utilities, useNA = "ifany")
-combined$Utilities[is.na(combined$Utilities)] <- names(sort(-table(combined$Utilities)))[1]
-combined$Utilities <- as.factor(combined$Utilities)
-
-table(combined$Exterior1st, useNA = "ifany")
-combined$Exterior1st[is.na(combined$Exterior1st)] <-
-names(sort(-table(combined$Exterior1st)))[1]
-combined$Exterior1st <- as.factor(combined$Exterior1st)
-
-table(combined$Exterior2nd, useNA = "ifany")
-combined$Exterior2nd[is.na(combined$Exterior2nd)] <-
-names(sort(-table(combined$Exterior2nd)))[1]
-combined$Exterior2nd <- as.factor(combined$Exterior2nd)
 
 table(combined$Electrical, useNA = "ifany")
 combined$Electrical[is.na(combined$Electrical)] <-
 names(sort(-table(combined$Electrical)))[1]
 combined$Electrical <- as.factor(combined$Electrical)
 
-table(combined$SaleType, useNA = "ifany")
-combined$SaleType[is.na(combined$SaleType)] <-
-names(sort(-table(combined$SaleType)))[1]
-combined$SaleType <- as.factor(combined$SaleType)
 
 x <- sort(colSums(sapply(combined[,categorical_variables], is.na)), decreasing = T)
 x
@@ -489,7 +425,7 @@ combined$PavedDrive <- factor(combined$PavedDrive, order = TRUE, levels = c('N',
 misscounts <- sapply(combined,function(x) sum(is.na(x)))
 missmap(combined, main = "Missing values")
 
-anyNA(combined[,!names(combined) %in% c("SalePrice")])
+anyNA(combined)
 ```
 
 As we can see there are no missing values except in SalePrice as this indicates the obeservations for test data.
