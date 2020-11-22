@@ -435,6 +435,7 @@ num_vars <- which(sapply(combined,is.numeric))
 factor_vars <- which(sapply(combined,is.factor))
 cat('numeric variables: ', length(num_vars),' and categorical variables: ',length(factor_vars),'\n')
 str(combined)
+write.csv(combined, "../data/processed/clean_data.csv")
 ```
 
 
