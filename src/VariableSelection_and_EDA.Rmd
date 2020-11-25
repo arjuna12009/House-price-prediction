@@ -1,0 +1,331 @@
+---
+title: "Project_MATH564"
+author: "Kevin Tchouate Mouofo"
+date: "11/22/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load the data
+
+```{r cars}
+data <- read.csv("/Users/kevinmouofo/Downloads/Math-564-project-main/Data/Processed/clean_data.csv", 
+                 sep=",", header = TRUE )
+str(data)
+```
+
+
+### Bidirectional elimination
+
+```{r echo=TRUE}
+fit0 <- lm(SalePrice~., data=data[-c(1,2)])
+
+fit.both <- step(fit0, scope=list(lower=~1,upper=~MSZoning + Street + Alley + LotShape + LandContour + Utilities + LotConfig + LandSlope + Neighborhood + Condition1  +  Condition2 +  BldgType + HouseStyle +  RoofStyle + RoofMatl + Exterior1st + Exterior2nd + MasVnrType + ExterQual + ExterCond + Foundation + BsmtQual + BsmtCond + BsmtExposure  + BsmtFinType1 + BsmtFinType2 + Heating + HeatingQC + CentralAir + Electrical + KitchenQual + Functional + FireplaceQu + GarageType + GarageFinish + GarageQual + GarageCond + PavedDrive + PoolQC + Fence + MiscFeature + SaleType + SaleCondition + MSSubClass + LotFrontage+LotArea+OverallQual+OverallCond +YearBuilt + YearRemodAdd + MasVnrArea + BsmtFinSF1+ BsmtFinSF2  +  BsmtUnfSF +  TotalBsmtSF + X1stFlrSF +  X2ndFlrSF + LowQualFinSF + GrLivArea + BsmtFullBath + BsmtHalfBath + FullBath + HalfBath + BedroomAbvGr + KitchenAbvGr + TotRmsAbvGrd + Fireplaces  + GarageYrBlt + GarageCars + GarageArea + WoodDeckSF + OpenPorchSF + EnclosedPorch + X3SsnPorch + ScreenPorch + PoolArea + MiscVal + MoSold + YrSold), direction = "both")
+
+summary(fit.both)
+```
+
+
+# EDA
+
+From the bidirectional elinmination, we notice that the most significant variables are : SaleCondition, PoolQC, PoolArea, GarageCond, GarageQual, KitchenQual, Neighborhood, BedroomAbvGr, X1stFlrSF, X2ndFlrSF, BsmtFinSF1, BsmtFinSF2, BsmtUnfSF,  BsmtExposure, BsmtQual, ExterQual, MasVnrArea, RoofMatl, YearBuilt, OverallQual, OverallCond, Condition2, Condition1, LandSlope, LotArea
+
+
+```{r pressure, echo=FALSE}
+most <- c("SaleCondition", "PoolQC", "PoolArea", "GarageCond", "GarageQual", "KitchenQual", "Neighborhood", "BedroomAbvGr", "X1stFlrSF", "X2ndFlrSF", "BsmtFinSF1", 
+"BsmtFinSF2", "BsmtUnfSF",  "BsmtExposure", "BsmtQual", "ExterQual", "MasVnrArea", "RoofMatl", "YearBuilt", "OverallQual", "OverallCond", "Condition2",
+"Condition1", "LandSlope", "LotArea")
+
+length(most)
+```
+
+## Quantitative variables analysis
+
+### Identify numerical variables
+
+```{r echo=TRUE}
+#Names of quantitatives variables
+names_quant <- colnames(data[, most][which(sapply(data[,most],is.numeric))])
+
+names_quant
+cat("We have ", length(names_quant), "quantitative variables")
+```
+
+### Correlation matrixes
+
+#### Pearson
+
+```{r echo=TRUE}
+cor(data[,c("SalePrice",names_quant)])
+```
+
+#### Spearman
+
+```{r echo=TRUE}
+cor(data[,c("SalePrice",names_quant)], method="spearman")
+```
+
+From the correlation matrixes, we can already see that OverallQual, YearBuilt, and X1stFlrSF are strongly correlated with our targret variable. 
+Furthermore, BsmtFinSF1-BsmtUnfSF, YearBuilt-OverallQual, BedroomAbvGr-X2ndFlrSF are highly correlated.
+
+We can select : OverallQual, X1stFlrSF, MasVnrArea.
+As backup variables we could use : LotArea(***), YearBuilt(** colinearity OverallQual).
+
+I add Yearbuilt because even if it is correlated with OverallQuall, the correlation is not serious and might be handled.
+
+### Scatter plot
+
+```{r echo=TRUE}
+plot(data[,c("SalePrice",names_quant[1:6])])
+```
+
+```{r echo=TRUE}
+plot(data[,c("SalePrice",names_quant[7:12])])
+```
+
+From the scatter plots above, we can see that OverallQual, Yearbuilt, BsmtUnfSF, BsmtFinSF2, X2ndFlrSF, have a clear linear relationship with the target varibale. We can also notice thatX1stFlrSF and BsmtUnfSF have a serious linear relationship.
+
+
+
+## Quanlitative variables analysis
+
+### Identify qualitative variables and convert them to dummy variables
+
+```{r echo=TRUE}
+#Names of quantitatives variables
+names_qual <- colnames(data[,most][,which(sapply(data[,most],is.factor))])
+
+names_qual
+cat("We have ", length(names_qual), "quantitative variables")
+```
+
+```{r echo=TRUE}
+sapply(names_qual, FUN=function(x){
+  count <- table(data[,x])
+  barplot(count, xlab=x)
+  })
+```
+
+
+
+##### Convert ordinal variables to numerical variables
+
+```{r echo=TRUE}
+#best<-regsubsets(x=data[,c(1:4)], y=data$SalePrice, nbest=1, nvmax=4, method="exhaustive")
+# PoolQC
+
+table(data[, "PoolQC"])
+
+y <- as.character(data[, "PoolQC"])
+y <- replace(y, y=='None', values = 0)
+y <- replace(y, y=='Fa', values = 1)
+y <- replace(y, y=='TA', values = 2)
+y <- replace(y, y=='Gd', values = 3)
+y <- replace(y, y=='Ex', values = 4)
+y <- as.numeric(y)
+
+cor(data[,"SalePrice"], y)
+cor(data[,"SalePrice"], y, method = "spearman")
+plot(y, data[,"SalePrice"])
+```
+
+
+```{r echo=TRUE}
+#GarageCond
+
+table(data[, "GarageCond"])
+
+y <- as.character(data[, "GarageCond"])
+y <- replace(y, y=='None', values = 0)
+y <- replace(y, y=='Po', values = 1)
+y <- replace(y, y=='Fa', values = 2)
+y <- replace(y, y=='TA', values = 3)
+y <- replace(y, y=='Gd', values = 4)
+y <- replace(y, y=='Ex', values = 5)
+y <- as.numeric(y)
+
+gc <- y
+
+cor(data[,"SalePrice"], y)
+cor(data[,"SalePrice"], y, method = "spearman")
+plot(y, data[,"SalePrice"])
+```
+```{r echo=TRUE}
+#GarageQual
+
+table(data[, "GarageQual"])
+
+y <- as.character(data[, "GarageQual"])
+y <- replace(y, y=='None', values = 0)
+y <- replace(y, y=='Po', values = 1)
+y <- replace(y, y=='Fa', values = 2)
+y <- replace(y, y=='TA', values = 3)
+y <- replace(y, y=='Gd', values = 4)
+y <- replace(y, y=='Ex', values = 5)
+y <- as.numeric(y)
+
+gq <- y
+cor(data[,"SalePrice"], y)
+cor(data[,"SalePrice"], y, method = "spearman")
+plot(y, data[,"SalePrice"])
+```
+
+```{r echo=TRUE}
+#GarageCond vs GarageQual
+cor(gc,gq)
+```
+
+```{r echo=TRUE}
+#KitchenQual
+
+table(data[, "KitchenQual"])
+
+y <- as.character(data[, "KitchenQual"])
+y <- replace(y, y=='None', values = 0)
+y <- replace(y, y=='Po', values = 1)
+y <- replace(y, y=='Fa', values = 2)
+y <- replace(y, y=='TA', values = 3)
+y <- replace(y, y=='Gd', values = 4)
+y <- replace(y, y=='Ex', values = 5)
+y <- as.numeric(y)
+
+KQ <- y
+cor(data[,"SalePrice"], y)
+cor(data[,"SalePrice"], y, method = "spearman")
+plot(y, data[,"SalePrice"])
+```
+
+```{r echo=TRUE}
+#BsmtExposure
+
+table(data[, "BsmtExposure"])
+
+y <- as.character(data[, "BsmtExposure"])
+y <- replace(y, y=='None', values = 0)
+y <- replace(y, y=='No', values = 1)
+y <- replace(y, y=='Mn', values = 2)
+y <- replace(y, y=='Av', values = 3)
+y <- replace(y, y=='Gd', values = 4)
+
+y <- as.numeric(y)
+
+BE <- y
+cor(data[,"SalePrice"], y)
+cor(data[,"SalePrice"], y, method = "spearman")
+plot(y, data[,"SalePrice"])
+```
+
+
+```{r echo=TRUE}
+#BsmtQual
+
+table(data[, "BsmtQual"])
+
+y <- as.character(data[, "BsmtQual"])
+y <- replace(y, y=='None', values = 0)
+y <- replace(y, y=='Po', values = 1)
+y <- replace(y, y=='Fa', values = 2)
+y <- replace(y, y=='TA', values = 3)
+y <- replace(y, y=='Gd', values = 4)
+y <- replace(y, y=='Ex', values = 5)
+
+y <- as.numeric(y)
+
+BQ <- y
+cor(data[,"SalePrice"], y)
+cor(data[,"SalePrice"], y, method = "spearman")
+plot(y, data[,"SalePrice"])
+```
+
+
+```{r echo=TRUE}
+#BsmtQual vs BsmtExposure
+cor(BE, BQ)
+```
+
+```{r echo=TRUE}
+#ExterQual
+
+table(data[, "ExterQual"])
+
+y <- as.character(data[, "ExterQual"])
+
+y <- replace(y, y=='Po', values = 0)
+y <- replace(y, y=='Fa', values = 1)
+y <- replace(y, y=='TA', values = 2)
+y <- replace(y, y=='Gd', values = 3)
+y <- replace(y, y=='Ex', values = 4)
+
+y <- as.numeric(y)
+
+EQ <- y
+cor(data[,"SalePrice"], y)
+cor(data[,"SalePrice"], y, method = "spearman")
+plot(y, data[,"SalePrice"])
+```
+
+```{r echo=TRUE}
+#LandSlope
+
+table(data[, "LandSlope"])
+
+y <- as.character(data[, "LandSlope"])
+
+y <- replace(y, y=='Gtl', values = 0)
+y <- replace(y, y=='Mod', values = 1)
+y <- replace(y, y=='Sev', values = 2)
+
+y <- as.numeric(y)
+
+cor(data[,"SalePrice"], y)
+cor(data[,"SalePrice"], y, method = "spearman")
+plot(y, data[,"SalePrice"])
+```	
+	
+```{r echo=TRUE}
+# ExterQual vs BsmtQual
+cor(EQ,BQ)
+# KitchenQual vs ExterQual
+cor(KQ, EQ)
+# BsmtQual vs KitchenQual
+cor(KQ, BQ)
+```	
+
+From the plots above, we can see that there three ordinals variables that are strongly correlated to the SalePrice target : ExterQual, KitchenQual and BsmtQual.
+However, those three predicators are highly correlated to each other.
+	
+In conclusion, based on colinearity and correlation, we can select ExterQual, RoofMatl.
+We should also consider the following qualitative variables as backup variables : SaleCondition(* categorical), PoolQC(*),  Neighborhood(* categorical), BsmtExposure(***), GarageQual(**), condition1(*),
+condition2(*).
+	
+
+
+
+
+I did a second screen at the predicators variables for the low and medium significant variables. I observe an interesting fact, not all significant variables are highly correlated with the target variable. Let's take PoolArea for instance. We can notice that it is not linearly related to the target variable but it is significant. So I decide to keep those variables in a different list for further tests. Maybe those variables will require to take their quadratic forms or other transformation to get their full contribution.
+
+Hence, we select : LotArea, PoolArea, BedroomAbvGr, KitchenAbvGr, ScreenPorch, PoolArea, Street
+
+
+```{r echo=TRUE}
+#Names of quantitatives variables
+med <-  c("BedroomAbvGr", "KitchenAbvGr", "ScreenPorch", "PoolArea", "Street")
+names_ <- colnames(data[, med][which(sapply(data[,med],is.numeric))])
+
+names_
+cat("We have ", length(names_), "quantitative variables")
+cor(data[,c("SalePrice", names_)])
+```
+
+
+We could also create variables for the most significant dummy variables of a qualitative predicator.
+
+
+# So overall, we could start working with the 10 predicators variables : OverallQual, X1stFlrSF, MasVnrArea, ExterQual, RoofMatl, LotArea, PoolArea, BsmtExposure, Neighborhood, GarageQual.
+
+
