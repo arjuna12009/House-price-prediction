@@ -22,7 +22,7 @@ str(data)
 
 ### Bidirectional elimination
 
-```{r pressure, echo=TRUE}
+```{r echo=TRUE}
 fit0 <- lm(SalePrice~., data=data[-c(1,2)])
 
 fit.both <- step(fit0, scope=list(lower=~1,upper=~MSZoning + Street + Alley + LotShape + LandContour + Utilities + LotConfig + LandSlope + Neighborhood + Condition1  +  Condition2 +  BldgType + HouseStyle +  RoofStyle + RoofMatl + Exterior1st + Exterior2nd + MasVnrType + ExterQual + ExterCond + Foundation + BsmtQual + BsmtCond + BsmtExposure  + BsmtFinType1 + BsmtFinType2 + Heating + HeatingQC + CentralAir + Electrical + KitchenQual + Functional + FireplaceQu + GarageType + GarageFinish + GarageQual + GarageCond + PavedDrive + PoolQC + Fence + MiscFeature + SaleType + SaleCondition + MSSubClass + LotFrontage+LotArea+OverallQual+OverallCond +YearBuilt + YearRemodAdd + MasVnrArea + BsmtFinSF1+ BsmtFinSF2  +  BsmtUnfSF +  TotalBsmtSF + X1stFlrSF +  X2ndFlrSF + LowQualFinSF + GrLivArea + BsmtFullBath + BsmtHalfBath + FullBath + HalfBath + BedroomAbvGr + KitchenAbvGr + TotRmsAbvGrd + Fireplaces  + GarageYrBlt + GarageCars + GarageArea + WoodDeckSF + OpenPorchSF + EnclosedPorch + X3SsnPorch + ScreenPorch + PoolArea + MiscVal + MoSold + YrSold), direction = "both")
@@ -48,7 +48,7 @@ length(most)
 
 ### Identify numerical variables
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 #Names of quantitatives variables
 names_quant <- colnames(data[, most][which(sapply(data[,most],is.numeric))])
 
@@ -60,13 +60,13 @@ cat("We have ", length(names_quant), "quantitative variables")
 
 #### Pearson
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 cor(data[,c("SalePrice",names_quant)])
 ```
 
 #### Spearman
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 cor(data[,c("SalePrice",names_quant)], method="spearman")
 ```
 
@@ -80,11 +80,11 @@ I add Yearbuilt because even if it is correlated with OverallQuall, the correlat
 
 ### Scatter plot
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 plot(data[,c("SalePrice",names_quant[1:6])])
 ```
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 plot(data[,c("SalePrice",names_quant[7:12])])
 ```
 
@@ -96,7 +96,7 @@ From the scatter plots above, we can see that OverallQual, Yearbuilt, BsmtUnfSF,
 
 ### Identify qualitative variables and convert them to dummy variables
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 #Names of quantitatives variables
 names_qual <- colnames(data[,most][,which(sapply(data[,most],is.factor))])
 
@@ -104,7 +104,7 @@ names_qual
 cat("We have ", length(names_qual), "quantitative variables")
 ```
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 sapply(names_qual, FUN=function(x){
   count <- table(data[,x])
   barplot(count, xlab=x)
@@ -115,7 +115,7 @@ sapply(names_qual, FUN=function(x){
 
 ##### Convert ordinal variables to numerical variables
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 #best<-regsubsets(x=data[,c(1:4)], y=data$SalePrice, nbest=1, nvmax=4, method="exhaustive")
 # PoolQC
 
@@ -135,7 +135,7 @@ plot(y, data[,"SalePrice"])
 ```
 
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 #GarageCond
 
 table(data[, "GarageCond"])
@@ -155,7 +155,7 @@ cor(data[,"SalePrice"], y)
 cor(data[,"SalePrice"], y, method = "spearman")
 plot(y, data[,"SalePrice"])
 ```
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 #GarageQual
 
 table(data[, "GarageQual"])
@@ -175,12 +175,12 @@ cor(data[,"SalePrice"], y, method = "spearman")
 plot(y, data[,"SalePrice"])
 ```
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 #GarageCond vs GarageQual
 cor(gc,gq)
 ```
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 #KitchenQual
 
 table(data[, "KitchenQual"])
@@ -200,7 +200,7 @@ cor(data[,"SalePrice"], y, method = "spearman")
 plot(y, data[,"SalePrice"])
 ```
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 #BsmtExposure
 
 table(data[, "BsmtExposure"])
@@ -221,7 +221,7 @@ plot(y, data[,"SalePrice"])
 ```
 
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 #BsmtQual
 
 table(data[, "BsmtQual"])
@@ -243,12 +243,12 @@ plot(y, data[,"SalePrice"])
 ```
 
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 #BsmtQual vs BsmtExposure
 cor(BE, BQ)
 ```
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 #ExterQual
 
 table(data[, "ExterQual"])
@@ -269,7 +269,7 @@ cor(data[,"SalePrice"], y, method = "spearman")
 plot(y, data[,"SalePrice"])
 ```
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 #LandSlope
 
 table(data[, "LandSlope"])
@@ -287,7 +287,7 @@ cor(data[,"SalePrice"], y, method = "spearman")
 plot(y, data[,"SalePrice"])
 ```	
 	
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 # ExterQual vs BsmtQual
 cor(EQ,BQ)
 # KitchenQual vs ExterQual
@@ -312,7 +312,7 @@ I did a second screen at the predicators variables for the low and medium signif
 Hence, we select : LotArea, PoolArea, BedroomAbvGr, KitchenAbvGr, ScreenPorch, PoolArea, Street
 
 
-```{r pressure, echo=FALSE}
+```{r echo=TRUE}
 #Names of quantitatives variables
 med <-  c("BedroomAbvGr", "KitchenAbvGr", "ScreenPorch", "PoolArea", "Street")
 names_ <- colnames(data[, med][which(sapply(data[,med],is.numeric))])
