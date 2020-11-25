@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # Load the data
 
 ```{r cars}
-data <- read.csv("/Users/kevinmouofo/Downloads/Math-564-project-main/Data/Processed/clean_data.csv", 
+data <- read.csv("../Data/Processed/clean_data.csv", 
                  sep=",", header = TRUE )
 str(data)
 ```
@@ -131,7 +131,7 @@ y <- as.numeric(y)
 
 cor(data[,"SalePrice"], y)
 cor(data[,"SalePrice"], y, method = "spearman")
-plot(y, data[,"SalePrice"])
+histogram(y, data[,"SalePrice"])
 ```
 
 
@@ -328,4 +328,23 @@ We could also create variables for the most significant dummy variables of a qua
 
 # So overall, we could start working with the 10 predicators variables : OverallQual, X1stFlrSF, MasVnrArea, ExterQual, RoofMatl, LotArea, PoolArea, BsmtExposure, Neighborhood, GarageQual.
 
+
+
+# variable importance with random forest model
+
+install.packages("randomForest")
+
+http://r-statistics.co/Variable-Selection-and-Importance-With-R.html
+
+
+```{r}
+library(randomForest)
+set.seed(2018)
+rf_model <- randomForest(SalePrice~.,data = data, ntree = 100, mtry = 2, importance = TRUE)
+rf_model
+```
+
+```{r}
+varImpPlot(rf_model)
+```
 
