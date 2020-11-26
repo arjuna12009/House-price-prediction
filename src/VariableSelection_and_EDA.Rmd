@@ -345,6 +345,16 @@ rf_model
 ```
 
 ```{r}
+library(dplyr)
+library(ggplot2)
 varImpPlot(rf_model)
+feat_imp_df<-importance(rf_model) %>% data.frame() %>% mutate(feature= row.names(.))
+
+ggplot(feat_imp_df, aes(x = reorder(feature,X.IncMSE), 
+                         y = X.IncMSE)) +
+    geom_bar(stat='identity') +
+    coord_flip() +
+    theme_classic() + 
+  labs(y = "% increase in MSE", x = "Features", title = "Feature importance")
 ```
 
