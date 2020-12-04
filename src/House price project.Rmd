@@ -1,0 +1,1219 @@
+---
+title: "House Prices Project"
+author: "Arjuna Anilkumar, A20446963"
+date: "11/8/2020"
+output: pdf_document
+geometry: margin= 1cm
+---
+
+
+# Introduction 
+
+This project aims to predict the final price of houses using the Ames housing dataset.
+
+# Data description
+
+The Ames Housing dataset was compiled by Dean De Cock for use in data science education. It's an alternative to the Boston Housing dataset and is for data scientists looking for a modernized and expanded version of the often cited Boston Housing dataset.
+
+The Ames housing data contains With 79 explanatory variables describing (almost) every aspect of residential homes in Ames, Iowa.
+
+# Data Processing 
+
+
+
+## Install packages
+
+```{r}
+#install.packages(c("Amelia","purrr","tidyr","ggplot2","rpart","plyr","corrplot","RColorBrewer","ggrepel","DescTools","caret","xgboost","randomForest"))
+```
+
+## Load data
+
+```{r}
+df <- read.table("../data/raw/train.csv", sep = ",",header = T)
+head(df)
+combined <- df
+
+combined <- combined[,!names(combined) %in% "Id"]
+str(combined)
+```
+
+
+## Missing values
+
+```{r}
+library(Amelia)
+misscounts <- sapply(combined,function(x) sum(is.na(x)))
+missmap(combined, main = "Missing values")
+```
+
+```{r}
+sort(colSums(sapply(combined, is.na)), decreasing = T)
+```
+
+### pool variables
+
+The PoolQC has the most missing values. Pool area does not have missing values but it is related to PoolQC as it does not make sense to have a pool quality data when there is zero pool area or no pool. Its description from the data description document is.
+
+PoolQC: Pool quality
+		
+       Ex	Excellent
+       Gd	Good
+       TA	Average/Typical
+       Fa	Fair
+       NA	No Pool
+
+Since a house with no pool has NA they are not really missing values.
+we can check with other pool related variables to see if there are any actual missing values in our data.
+
+```{r}
+table(is.na(combined$PoolQC))
+table(combined$PoolArea, combined$PoolQC, useNA = 'ifany')
+```
+
+Here we have some actual missing values. We have 13 houses with pool area data but we have only 10 PoolQC data available. 
+
+
+```{r}
+library(plyr)
+library(ggplot2)
+combined[combined$PoolArea==0,]$PoolQC <- "None"
+
+# convert all NA's in PoolQC to none except for the 3 actual missing values.
+
+combined[is.na(combined$PoolQC),c("OverallQual","PoolArea")]
+
+# imputing the values of poolQC according to overall quality and pool area.
+
+combined[is.na(combined$PoolQC),"PoolQC"] <- c("TA","Gd","TA")
+
+# label encoding as the values are ordinal.
+
+quality <- c("None" = 0, 'Po' = 1 , 'Fa' = 2, 'TA'=3 , 'Gd'=4, 'Ex'=5 )
+
+combined$PoolQC <- as.integer(revalue(combined$PoolQC, quality))
+
+table(combined$PoolQC)
+str(combined$PoolQC)
+barplot(table(combined$PoolQC), xlab = "PoolQC", ylab = "Count")
+ggplot(combined, aes(x=PoolQC, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+```{r}
+table(combined$PoolArea)
+barplot(table(combined$PoolArea), xlab = "PoolArea", ylab = "Count")
+ggplot(combined, aes(x=PoolArea, y = SalePrice)) + geom_point()
+```
+
+### MiscFeature variable 
+
+```{r}
+table(combined$MiscFeature, useNA = "ifany")
+```
+
+In MiscFeature variable, there are 1406 missing values that have to be replaced by none.
+
+```{r}
+library(ggplot2)
+
+# convert all NA's in MiscFeature to none.
+combined[is.na(combined$MiscFeature),"MiscFeature"] <- "None"
+
+# convert to factor
+combined$MiscFeature <- as.factor(combined$MiscFeature)
+
+ggplot(combined, aes(x=MiscFeature, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### Alley Predictor
+
+```{r}
+table(combined$Alley, useNA = "ifany")
+```
+
+```{r}
+# convert all NA's in Alley to none.
+combined[is.na(combined$Alley),"Alley"] <- "None"
+
+# convert to factor
+combined$Alley <- as.factor(combined$Alley)
+
+ggplot(combined, aes(x=Alley, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### Fence predictor
+
+
+```{r}
+table(combined$Fence, useNA = "ifany")
+```
+
+```{r}
+# convert all NA's in Fence to none.
+combined[is.na(combined$Fence),"Fence"] <- "None"
+
+# convert to factor
+combined$Fence <- as.factor(combined$Fence)
+
+ggplot(combined, aes(x=Fence, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### Fireplace variables
+
+Fireplace quality
+
+```{r}
+table(combined$FireplaceQu, useNA = "ifany")
+```
+
+```{r}
+# convert all NA's in FireplaceQu to none.
+
+combined[is.na(combined$FireplaceQu),"FireplaceQu"] <- "None"
+
+# Changing and converting to factor levels from character.
+
+
+combined$FireplaceQu <- as.integer(revalue(combined$FireplaceQu, quality))
+
+table(combined$FireplaceQu, useNA = "ifany")
+str(combined$FireplaceQu)
+anyNA(combined$FireplaceQu)
+
+barplot(table(combined$FireplaceQu), xlab = "FireplaceQu", ylab = "Count")
+ggplot(combined, aes(x=FireplaceQu, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### Lot variables
+
+LotFrontage
+LotShape
+LotConfig
+LotArea
+
+```{r}
+table(is.na(combined$LotFrontage))
+```
+
+Here we have 259 missing values which cannot be replaced by none as it is a numerical variable. So we predict using rpart.
+
+http://r-statistics.co/Missing-Value-Treatment-With-R.html
+
+```{r}
+# predictors that lotfrontage variable might depend on.
+predictors <- c("MSSubClass", "MSZoning", "LotFrontage", "LotArea", "Street", "Alley", "LotShape", "LandContour", "LotConfig", "LandSlope", "BldgType", "HouseStyle", "YrSold", "SaleType", "SaleCondition")
+library(rpart)
+mod <- rpart(LotFrontage~., data = combined[!is.na(combined$LotFrontage),predictors], method = "anova", na.action = na.omit)
+
+pred <- predict(mod, combined[is.na(combined$LotFrontage),predictors])
+pred <- round(pred)
+combined$LotFrontage[is.na(combined$LotFrontage)] <- pred
+anyNA(combined$LotFrontage)
+ggplot(combined, aes(x=LotFrontage, y = SalePrice)) + geom_point()
+```
+
+```{r}
+table(combined$LotShape, useNA = "ifany")
+
+combined$LotShape <- as.integer(revalue(combined$LotShape,  c("IR3"=0 , "IR2"=1 , "IR1"=2 , "Reg"=3 )))
+barplot(table(combined$LotShape), xlab = "LotShape", ylab = "Count")
+ggplot(combined, aes(x=LotShape, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+```{r}
+table(combined$LotConfig, useNA = "ifany")
+combined$LotConfig <- as.factor(combined$LotConfig)
+barplot(table(combined$LotConfig), xlab = "LotConfig", ylab = "Count")
+ggplot(combined, aes(x=LotConfig, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+###  Garage variables 
+
+GarageYrBlt
+GarageType
+GarageFinish,
+GarageQual,
+GarageCond,
+GarageCars,
+GarageArea
+
+```{r}
+garage <- c("GarageYrBlt","GarageType","GarageFinish","GarageQual","GarageCond","GarageCars","GarageArea")
+sort(colSums(sapply(combined[,garage], is.na)), decreasing = T)
+
+```
+
+```{r}
+combined$GarageYrBlt[is.na(combined$GarageYrBlt)] <- combined$YearBuilt[is.na(combined$GarageYrBlt)]
+
+combined$GarageType[is.na(combined$GarageType)] <- "None"
+combined$GarageFinish[is.na(combined$GarageFinish)] <- "None"
+combined$GarageCond[is.na(combined$GarageCond)] <- "None"
+combined$GarageQual[is.na(combined$GarageQual)] <- "None"
+sort(colSums(sapply(combined[,garage], is.na)), decreasing = T)
+```
+
+
+```{r}
+# convert into factor
+combined$GarageType <- as.factor(combined$GarageType)
+table(combined$GarageType)
+barplot(table(combined$GarageType), xlab = "GarageType", ylab = "Count")
+ggplot(combined, aes(x=GarageType, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+```{r}
+Finish <- c('None'=0, 'Unf'=1, 'RFn'=2, 'Fin'=3)
+combined$GarageFinish<-as.integer(revalue(combined$GarageFinish,  Finish))
+table(combined$GarageFinish, useNA = 'ifany')
+barplot(table(combined$GarageFinish), xlab = "GarageFinish", ylab = "Count")
+ggplot(combined, aes(x=GarageFinish, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+```{r}
+combined$GarageCond<-as.integer(revalue(combined$GarageCond,  quality))
+table(combined$GarageCond, useNA = "ifany")
+barplot(table(combined$GarageCond), xlab = "GarageCond", ylab = "Count")
+ggplot(combined, aes(x=GarageCond, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+```{r}
+combined$GarageQual<-as.integer(revalue(combined$GarageQual,  quality))
+table(combined$GarageQual, useNA = "ifany")
+barplot(table(combined$GarageQual), xlab = "GarageQual", ylab = "Count")
+ggplot(combined, aes(x=GarageQual, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+```{r}
+
+barplot(table(combined$GarageCars), xlab = "GarageCars", ylab = "Count")
+ggplot(combined, aes(x=GarageCars, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+```{r}
+ggplot(combined, aes(x=GarageArea, y = SalePrice)) + geom_point()
+```
+
+### Basement variables
+
+there are 11 basement variables
+
+BsmtQual,
+BsmtCond,
+BsmtExposure,
+BsmtFinType1,
+BsmtFinType2,
+BsmtFullBath,
+BsmtHalfBath,
+BsmtFinSF1,
+BsmtFinSF2,
+BsmtUnfSF,
+TotalBsmtSF
+
+```{r}
+basement <- c("BsmtQual","BsmtCond","BsmtExposure","BsmtFinType1","BsmtFinType2","BsmtFullBath","BsmtHalfBath","BsmtFinSF1","BsmtFinSF2","BsmtUnfSF","TotalBsmtSF")
+sort(colSums(sapply(combined[,basement], is.na)), decreasing = T)
+
+```
+
+```{r}
+x <- which(!is.na(combined$BsmtFinType1) & (is.na(combined$BsmtCond)|is.na(combined$BsmtExposure)|is.na(combined$BsmtQual)|is.na(combined$BsmtFinType2)))
+
+combined[x,basement]
+
+# impute mode
+combined[c(949),"BsmtExposure"] <- names(sort(-table(combined$BsmtExposure)))[1]
+combined[c(333),"BsmtFinType2"] <- names(sort(-table(combined$BsmtFinType2)))[1]
+combined[x,basement]
+anyNA(combined[x,basement])
+sort(colSums(sapply(combined[,basement], is.na)), decreasing = T)
+```
+
+```{r}
+combined$BsmtQual[is.na(combined$BsmtQual)] <- "None"
+combined$BsmtCond[is.na(combined$BsmtCond)] <- "None"
+combined$BsmtExposure[is.na(combined$BsmtExposure)] <- "None"
+combined$BsmtFinType1[is.na(combined$BsmtFinType1)] <- "None"
+combined$BsmtFinType2[is.na(combined$BsmtFinType2)] <- "None"
+combined$BsmtFullBath[is.na(combined$BsmtFullBath)] <- 0
+combined$BsmtHalfBath[is.na(combined$BsmtHalfBath)] <- 0
+
+sort(colSums(sapply(combined[,basement], is.na)), decreasing = T)
+```
+
+#### BsmtQual
+
+```{r}
+# label encoding
+
+combined$BsmtQual<-as.integer(revalue(combined$BsmtQual,  quality))
+table(combined$BsmtQual, useNA = "ifany")
+barplot(table(combined$BsmtQual), xlab = "BsmtQual", ylab = "Count")
+ggplot(combined, aes(x=BsmtQual, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+#### BsmtCond
+
+```{r}
+combined$BsmtCond<-as.integer(revalue(combined$BsmtCond,  quality))
+table(combined$BsmtCond, useNA = "ifany")
+barplot(table(combined$BsmtCond), xlab = "BsmtCond", ylab = "Count")
+ggplot(combined, aes(x=BsmtCond, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+#### BsmtExposure
+
+```{r}
+exposure <- c('None'=0,'No'=1,'Mn'=2,'Av'=3,'Gd'=4)
+combined$BsmtExposure<-as.integer(revalue(combined$BsmtExposure,  exposure))
+table(combined$BsmtExposure, useNA = "ifany")
+barplot(table(combined$BsmtExposure), xlab = "BsmtExposure", ylab = "Count")
+ggplot(combined, aes(x=BsmtExposure, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+#### BsmtFinType1
+
+```{r}
+rating <- c('None'=0,'Unf'=1,'LwQ'=2,'Rec'=3,'BLQ'=4,'ALQ'=5,'GLQ'=6)
+combined$BsmtFinType1<-as.integer(revalue(combined$BsmtFinType1,  rating))
+table(combined$BsmtFinType1, useNA = "ifany")
+barplot(table(combined$BsmtFinType1), xlab = "BsmtFinType1", ylab = "Count")
+ggplot(combined, aes(x=BsmtFinType1, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+#### BsmtFinType2
+
+```{r}
+combined$BsmtFinType2<-as.integer(revalue(combined$BsmtFinType2,  rating))
+table(combined$BsmtFinType2, useNA = "ifany")
+barplot(table(combined$BsmtFinType2), xlab = "BsmtFinType2", ylab = "Count")
+ggplot(combined, aes(x=BsmtFinType2, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+#### BsmtFullBath
+
+```{r}
+barplot(table(combined$BsmtFullBath), xlab = "BsmtFullBath", ylab = "Count")
+ggplot(combined, aes(x=BsmtFullBath, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+#### BsmtHalfBath
+
+```{r}
+barplot(table(combined$BsmtHalfBath), xlab = "BsmtHalfBath", ylab = "Count")
+ggplot(combined, aes(x=BsmtHalfBath, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+#### BsmtFinSF1
+
+```{r}
+ggplot(combined, aes(x=BsmtFinSF1, y = SalePrice)) + geom_point()
+```
+
+#### BsmtFinSF2
+```{r}
+ggplot(combined, aes(x=BsmtFinSF2, y = SalePrice)) + geom_point()
+```
+
+#### BsmtUnfSF
+```{r}
+ggplot(combined, aes(x=BsmtUnfSF, y = SalePrice)) + geom_point()
+
+```
+
+#### TotalBsmtSF
+```{r}
+ggplot(combined, aes(x=TotalBsmtSF, y = SalePrice)) + geom_point()
+
+```
+
+### masonry variables
+```{r}
+table(combined$MasVnrType)
+combined$MasVnrType[is.na(combined$MasVnrType)] <- "None"
+combined$MasVnrArea[is.na(combined$MasVnrArea)] <- 0
+combined$MasVnrType <- as.factor(combined$MasVnrType)
+table(combined$MasVnrType)
+barplot(table(combined$MasVnrType), xlab = "MasVnrType", ylab = "Count")
+ggplot(combined, aes(x=MasVnrType, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### Electrical variable
+
+```{r}
+table(combined$Electrical)
+combined$Electrical[is.na(combined$Electrical)] <- names(sort(-table(combined$Electrical)))[1]
+
+combined$Electrical <- as.factor(combined$Electrical)
+table(combined$Electrical)
+barplot(table(combined$Electrical), xlab = "Electrical", ylab = "Count")
+ggplot(combined, aes(x=Electrical, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### MSZoning
+
+```{r}
+table(combined$MSZoning)
+combined$MSZoning <- as.factor(combined$MSZoning)
+table(combined$MSZoning)
+barplot(table(combined$MSZoning), xlab = "MSZoning", ylab = "Count")
+ggplot(combined, aes(x=MSZoning, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### Street
+
+```{r}
+table(combined$Street)
+combined$Street<-as.integer(revalue(combined$Street, c('Grvl'=0, 'Pave'=1)))
+table(combined$Street)
+barplot(table(combined$Street), xlab = "Street", ylab = "Count")
+ggplot(combined, aes(x=Street, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### LandContour 
+
+Lvl  Near Flat/Level 
+Bnk  Banked - Quick and significant rise from street grade to building
+HLS  Hillside - Significant slope from side to side
+Low  Depression
+
+```{r}
+table(combined$LandContour)
+combined$LandContour <- as.factor(combined$LandContour)
+table(combined$LandContour)
+barplot(table(combined$LandContour), xlab = "LandContour", ylab = "Count")
+ggplot(combined, aes(x=LandContour, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### LandSlope
+
+   Gtl  Gentle slope
+   Mod  Moderate Slope  
+   Sev  Severe Slope
+```{r}
+table(combined$LandSlope)
+combined$LandSlope<-as.integer(revalue(combined$LandSlope, c('Sev'=0, 'Mod'=1, 'Gtl'=2)))
+table(combined$LandSlope)
+barplot(table(combined$LandSlope), xlab = "LandSlope", ylab = "Count")
+ggplot(combined, aes(x=LandSlope, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### Utilities
+
+```{r}
+table(combined$Utilities)
+
+# remove utilities as it does not give any valuable information.
+combined <- combined[,!names(combined) %in% "Utilities"]
+```
+
+### Neighborhood
+   
+```{r}
+table(combined$Neighborhood)
+combined$Neighborhood <- as.factor(combined$Neighborhood)
+table(combined$Neighborhood)
+barplot(table(combined$Neighborhood), xlab = "Neighborhood", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=Neighborhood, y = SalePrice)) + geom_bar(stat = 'summary')
+
+```
+
+### Condition1 and Condition2
+
+```{r}
+table(combined$Condition1)
+combined$Condition1 <- as.factor(combined$Condition1)
+table(combined$Condition1)
+barplot(table(combined$Condition1), xlab = "Condition1", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=Condition1, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+```{r}
+table(combined$Condition2)
+combined$Condition2 <- as.factor(combined$Condition2)
+table(combined$Condition2)
+barplot(table(combined$Condition2), xlab = "Condition2", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=Condition2, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### BldgType
+
+```{r}
+table(combined$BldgType)
+combined$BldgType <- as.factor(combined$BldgType)
+table(combined$BldgType)
+barplot(table(combined$BldgType), xlab = "BldgType", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=BldgType, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### HouseStyle
+
+```{r}
+table(combined$HouseStyle)
+combined$HouseStyle <- as.factor(combined$HouseStyle)
+table(combined$HouseStyle)
+barplot(table(combined$HouseStyle), xlab = "HouseStyle", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=HouseStyle, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### RoofStyle
+
+```{r}
+table(combined$RoofStyle)
+combined$RoofStyle <- as.factor(combined$RoofStyle)
+table(combined$RoofStyle)
+barplot(table(combined$RoofStyle), xlab = "RoofStyle", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=RoofStyle, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### RoofMatl
+
+```{r}
+table(combined$RoofMatl)
+combined$RoofMatl <- as.factor(combined$RoofMatl)
+table(combined$RoofMatl)
+barplot(table(combined$RoofMatl), xlab = "RoofMatl", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=RoofMatl, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### Exterior variables
+"Exterior1st"   "Exterior2nd"   "ExterQual"     "ExterCond"
+```{r}
+table(combined$Exterior1st)
+combined$Exterior1st <- as.factor(combined$Exterior1st)
+table(combined$Exterior1st)
+barplot(table(combined$Exterior1st), xlab = "Exterior1st", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=Exterior1st, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+```{r}
+table(combined$Exterior2nd)
+combined$Exterior2nd <- as.factor(combined$Exterior2nd)
+table(combined$Exterior2nd)
+barplot(table(combined$Exterior2nd), xlab = "Exterior2nd", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=Exterior2nd, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+```{r}
+table(combined$ExterQual)
+combined$ExterQual<-as.integer(revalue(combined$ExterQual, quality))
+table(combined$ExterQual)
+barplot(table(combined$ExterQual), xlab = "ExterQual", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=ExterQual, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+```{r}
+table(combined$ExterCond)
+combined$ExterCond<-as.integer(revalue(combined$ExterCond, quality))
+table(combined$ExterCond)
+barplot(table(combined$ExterCond), xlab = "ExterCond", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=ExterCond, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### Foundation
+
+```{r}
+table(combined$Foundation)
+combined$Foundation <- as.factor(combined$Foundation)
+table(combined$Foundation)
+barplot(table(combined$Foundation), xlab = "Foundation", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=Foundation, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### heating variables
+ "Heating"       "HeatingQC" 
+ 
+```{r}
+table(combined$Heating)
+combined$Heating <- as.factor(combined$Heating)
+table(combined$Heating)
+barplot(table(combined$Heating), xlab = "Heating", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=Heating, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+```{r}
+table(combined$HeatingQC)
+combined$HeatingQC<-as.integer(revalue(combined$HeatingQC, quality))
+table(combined$HeatingQC)
+barplot(table(combined$HeatingQC), xlab = "HeatingQC", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=HeatingQC, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### CentralAir
+
+```{r}
+table(combined$CentralAir)
+combined$CentralAir<-as.integer(revalue(combined$CentralAir, c('N'=0, 'Y'=1)))
+table(combined$CentralAir)
+barplot(table(combined$CentralAir), xlab = "CentralAir", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=CentralAir, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### KitchenQual
+
+```{r}
+table(combined$KitchenQual)
+combined$KitchenQual<-as.integer(revalue(combined$KitchenQual, quality))
+table(combined$KitchenQual)
+barplot(table(combined$KitchenQual), xlab = "KitchenQual", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=KitchenQual, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### Functional
+
+```{r}
+table(combined$Functional)
+combined$Functional<-as.integer(revalue(combined$Functional, c('Sal'=0, 'Sev'=1, 'Maj2'=2, 'Maj1'=3, 'Mod'=4, 'Min2'=5, 'Min1'=6, 'Typ'=7)))
+table(combined$Functional)
+barplot(table(combined$Functional), xlab = "Functional", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=Functional, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### PavedDrive
+
+```{r}
+table(combined$PavedDrive)
+combined$PavedDrive<-as.integer(revalue(combined$PavedDrive, c('N'=0, 'P'=1, 'Y'=2)))
+table(combined$PavedDrive)
+barplot(table(combined$PavedDrive), xlab = "PavedDrive", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=PavedDrive, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### Sales variables
+
+ "SaleType"      "SaleCondition"
+ 
+```{r}
+table(combined$SaleType)
+combined$SaleType <- as.factor(combined$SaleType)
+table(combined$SaleType)
+barplot(table(combined$SaleType), xlab = "SaleType", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=SaleType, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+```{r}
+table(combined$SaleCondition)
+combined$SaleCondition <- as.factor(combined$SaleCondition)
+table(combined$SaleCondition)
+barplot(table(combined$SaleCondition), xlab = "SaleCondition", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=SaleCondition, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### Remaining character variables
+
+```{r}
+Charcol <- names(combined[,sapply(combined, is.character)])
+Charcol
+```
+
+### MSSubClass
+
+    20  1-STORY 1946 & NEWER ALL STYLES
+    30  1-STORY 1945 & OLDER
+    40  1-STORY W/FINISHED ATTIC ALL AGES
+    45  1-1/2 STORY - UNFINISHED ALL AGES
+    50  1-1/2 STORY FINISHED ALL AGES
+    60  2-STORY 1946 & NEWER
+    70  2-STORY 1945 & OLDER
+    75  2-1/2 STORY ALL AGES
+    80  SPLIT OR MULTI-LEVEL
+    85  SPLIT FOYER
+    90  DUPLEX - ALL STYLES AND AGES
+   120  1-STORY PUD (Planned Unit Development) - 1946 & NEWER
+   150  1-1/2 STORY PUD - ALL AGES
+   160  2-STORY PUD - 1946 & NEWER
+   180  PUD - MULTILEVEL - INCL SPLIT LEV/FOYER
+   190  2 FAMILY CONVERSION - ALL STYLES AND AGES
+   
+```{r}
+table(combined$MSSubClass)
+combined$MSSubClass <- as.factor(combined$MSSubClass)
+
+#revalue for better readability
+combined$MSSubClass<-revalue(combined$MSSubClass, c('20'='1 story 1946+', '30'='1 story 1945-', '40'='1 story unf attic', '45'='1,5 story unf', '50'='1,5 story fin', '60'='2 story 1946+', '70'='2 story 1945-', '75'='2,5 story all ages', '80'='split/multi level', '85'='split foyer', '90'='duplex all style/age', '120'='1 story PUD 1946+', '150'='1,5 story PUD all', '160'='2 story PUD 1946+', '180'='PUD multilevel', '190'='2 family conversion'))
+barplot(table(combined$MSSubClass), xlab = "MSSubClass", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=MSSubClass, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### MoSold
+```{r}
+table(combined$MoSold)
+combined$MoSold <- as.factor(combined$MoSold)
+table(combined$MoSold)
+barplot(table(combined$MoSold), xlab = "MoSold", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=MoSold, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+### YrSold
+```{r}
+table(combined$YrSold)
+combined$YrSold <- as.factor(combined$YrSold)
+table(combined$YrSold)
+barplot(table(combined$YrSold), xlab = "YrSold", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=YrSold, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+```{r}
+sort(colSums(sapply(combined, is.na)), decreasing = T)
+```
+
+```{r}
+misscounts <- sapply(combined,function(x) sum(is.na(x)))
+missmap(combined, main = "Missing values")
+
+anyNA(combined)
+```
+
+As we can see there are no missing values.
+
+```{r}
+num_vars <- names(Filter(is.numeric,combined)) #index vector numeric variables
+factor_vars <- names(Filter(is.factor,combined))
+cat('numeric variables: ', length(num_vars),' and categorical variables: ',length(factor_vars),'\n')
+write.csv(combined, "../data/processed/clean_data.csv")
+```
+
+
+# EDA
+
+## Summarize Datasets
+```{r}
+# primary dataset
+str(combined)
+```
+
+## Numerical variables
+
+### SalePrice variable
+```{r}
+library(ggplot2)
+layout(mat = matrix(c(1,2),2,1, byrow=TRUE), height = c(1,8))
+par(mar=c(0, 3.1, 1.1, 2.1))
+boxplot(combined$SalePrice , horizontal=TRUE , xaxt="n", frame=F, main=sprintf('Histogram of SalePrice'))
+par(mar=c(4, 3.1, 1.1, 2.1))
+hist(combined$SalePrice,main='', xlab = "SalePrice", ylab = "count")
+```
+
+### SalePrice vs all other numerical variable scatterplots
+```{r}
+plot = function(variable){
+  print(variable)
+  ggplot(combined,aes(x = combined[,variable], y = SalePrice)) + geom_point() + theme_classic() + labs(x=variable)}
+library(gridExtra)
+p = list()
+p <- NULL
+val <- 0
+d <- combined[,num_vars]
+for(j in 1:6){
+  for(i in 1:9){
+    name = names(d[i+val])
+    p[[i]] = plot(as.character(name))}
+  val = i+val
+  do.call(grid.arrange,p)
+  p <- NULL}
+```
+
+### all numerical variables density plots
+
+```{r}
+library(purrr)
+library(tidyr)
+library(ggplot2)
+combined %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) + 
+      facet_wrap(~ key, scales = "free") + 
+      geom_histogram(aes(y=..density..), fill = "grey") + 
+      geom_density()
+ggsave("../Plots/density_numerical_variables.jpg", plot = last_plot(), width = 10, height = 7)
+```
+
+
+
+## Categorical variables
+
+### Histograms for Categorical Variables
+```{r}
+plot_factor = function(variable){
+  ggplot(combined,aes(x = combined[,variable], y = SalePrice)) +geom_bar(stat = 'summary') + theme_classic() + labs(x=variable)}
+
+library(gridExtra)
+p = list()
+p <- NULL
+val <- 0
+d <- combined[,factor_vars]
+for(j in 1:5){
+  for(i in 1:5){
+    name = names(d[i+val])
+    p[[i]] = plot_factor((name))}
+  val = i+val
+  do.call(grid.arrange,p)
+  p <- NULL}
+```
+
+# Feature engineering
+
+## Total bathrooms
+```{r}
+combined$TotBathrooms <- combined$FullBath + (combined$HalfBath*0.5) + combined$BsmtFullBath + (combined$BsmtHalfBath*0.5)
+table(combined$TotBathrooms)
+barplot(table(combined$TotBathrooms), xlab = "TotBathrooms", ylab = "Count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=TotBathrooms, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+## House age and remodelled houses
+
+After looking at the density plots and EDA, we found that there is no house age but ther e is remodeled year and year built variables so adding the age of the house to the data set and whether or not its been remodeled was important as Sale price does depend on how old the house is and whether or not its a remodeled house.
+
+### house age plot
+```{r}
+combined$Remod <- ifelse(combined$YearBuilt==combined$YearRemodAdd, 0, 1) #0=No Remodeling, 1=Remodeling
+combined$Age <- as.numeric(combined$YrSold)-combined$YearRemodAdd
+ggplot(data=combined[!is.na(combined$SalePrice),], aes(x=Age, y=SalePrice))+
+        geom_point(col='blue')+
+        scale_y_continuous(breaks= seq(0, 800000, by=100000))
+```
+
+### histogram of remodeled house variable
+```{r}
+barplot(table(combined$Remod), xlab = "Remodeled", ylab = "count")
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=Remod, y = SalePrice)) + geom_bar(stat = 'summary')
+```
+
+# Correlations
+
+## correlation matrix
+```{r}
+num_vars <- names(Filter(is.numeric,combined)) #index vector numeric variables
+factor_vars <- names(Filter(is.factor,combined))
+
+corr_matrix <- cor(combined[num_vars],method = "pearson")
+correlation_SalePrice <- sort(corr_matrix[,'SalePrice'],decreasing = TRUE)
+correlation_SalePrice
+```
+
+## correlation Plot
+```{r}
+library(corrplot)
+corrplot(corr_matrix,type = "upper",tl.col = "black",tl.cex = 0.8)
+```
+
+## correlation Plot of variables vs SalePrice > 0.5
+```{r}
+corr_sorted <- as.matrix(sort(corr_matrix[,'SalePrice'], decreasing = TRUE))
+ #select only high correlations
+Corr_High <- names(which(apply(corr_sorted, 1, function(x) abs(x)>0.5)))
+corr_matrix <- corr_matrix[Corr_High, Corr_High]
+
+corrplot.mixed(corr_matrix, tl.col="black", tl.pos = "lt", tl.cex = 0.8,cl.cex = 0.8, number.cex=0.8)
+```
+
+## Removing highly correlated variables
+```{r}
+# removing variables with high correlations between predictor # variables
+dropVars <- c('GarageYrBlt', 'GarageArea', 'TotalBsmtSF', 'TotalRmsAbvGrd')
+combined <- combined[,!names(combined) %in% dropVars]
+```
+
+# Outlier analysis
+
+## Detecting outliers
+
+```{r}
+# we look for outliers in the most correlated variable with SalePrice which is GrLivArea.
+library(ggrepel)
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=GrLivArea  , y = SalePrice)) + geom_point()+geom_smooth(method = "lm", se=FALSE, color="black", aes(group=1)) + geom_text_repel(aes(label = ifelse(GrLivArea>4500, rownames(combined), '')))
+```
+
+```{r}
+ggplot(combined[!is.na(combined$SalePrice),], aes(x=X1stFlrSF, y = SalePrice)) + geom_point()+geom_smooth(method = "lm", se=FALSE, color="black", aes(group=1)) + geom_text_repel(aes(label = ifelse(combined$X1stFlrSF>3000, rownames(combined), '')))
+```
+
+```{r}
+mod <- lm(SalePrice ~ ., data = combined)
+summary(mod)
+cooksd <- cooks.distance(mod)
+```
+
+```{r}
+# All outliers
+influential <- as.numeric(names(cooksd)[(cooksd > 10*mean(cooksd, na.rm=T))])  # influential row numbers
+influential <- na.omit(influential)
+influential
+```
+
+## Deleting outliers
+```{r}
+combined <- combined[-influential,]
+```
+
+# Preparing data for modelling
+
+Methods used in:
+https://topepo.github.io/caret/pre-processing.html
+
+```{r}
+df <- df[,!names(df) %in% "Id"]
+true_num_vars <- names(Filter(is.numeric,df))
+num_vars <- names(Filter(is.numeric,combined)) #index vector numeric variables
+factor_vars <- names(Filter(is.factor,combined))
+cat('numeric variables: ', length(num_vars),' and categorical variables:',length(factor_vars),'\n')
+```
+
+## Standardizing numerical predictor variables
+```{r}
+library(caret)
+library(DescTools)
+nvarnames <- true_num_vars[!(true_num_vars %in% c('MSSubClass', 'MoSold', 'YrSold', 'SalePrice', 'OverallQual', 'OverallCond'))] 
+num_df <- combined[, names(combined) %in% nvarnames]
+factor_df <- combined[, !(names(combined) %in% nvarnames)]
+factor_df <- factor_df[, names(factor_df) != 'SalePrice']
+
+cat('There are', length(num_df), 'numeric variables, and', length(factor_df), 'factor variables')
+
+for(i in 1:ncol(num_df)){
+        if (abs(Skew(num_df[,i]))>0.8){
+                num_df[,i] <- log(num_df[,i] +1)
+        }
+}
+
+Prenum <- preProcess(num_df, method=c("center", "scale"))
+print(Prenum)
+df_norm <- predict(Prenum, num_df)
+dim(df_norm)
+
+DFdummies <- as.data.frame(model.matrix(~.-1, factor_df))
+dim(DFdummies)
+
+ZerocolTest <- which(colSums(DFdummies[1:nrow(combined[!is.na(combined$SalePrice),]),])==0)
+colnames(DFdummies[ZerocolTest])
+DFdummies <- DFdummies[,-ZerocolTest] #removing predictors
+fewOnes <- which(colSums(DFdummies[1:nrow(combined[!is.na(combined$SalePrice),]),])<10)
+colnames(DFdummies[fewOnes])
+DFdummies <- DFdummies[,-fewOnes] #removing predictors
+dim(DFdummies)
+final <- cbind(num_df, DFdummies)
+```
+
+
+
+## Transforming SalePrice variable
+```{r}
+
+Skew(combined$SalePrice)
+qqnorm(combined$SalePrice)
+qqline(combined$SalePrice)
+layout(mat = matrix(c(1,2),2,1, byrow=TRUE), height = c(1,8))
+par(mar=c(0, 3.1, 1.1, 2.1))
+boxplot(combined$SalePrice , horizontal=TRUE , xaxt="n", frame=F, main=sprintf('Histogram of SalePrice'))
+par(mar=c(4, 3.1, 1.1, 2.1))
+hist(combined$SalePrice,main='', xlab = "SalePrice", ylab = "count")
+```
+
+```{r}
+combined$SalePrice <- log(combined$SalePrice)
+Skew(combined$SalePrice)
+qqnorm(combined$SalePrice)
+qqline(combined$SalePrice)
+layout(mat = matrix(c(1,2),2,1, byrow=TRUE), height = c(1,8))
+par(mar=c(0, 3.1, 1.1, 2.1))
+boxplot(combined$SalePrice , horizontal=TRUE , xaxt="n", frame=F, main=sprintf('Histogram of SalePrice'))
+par(mar=c(4, 3.1, 1.1, 2.1))
+hist(combined$SalePrice,main='', xlab = "SalePrice", ylab = "count")
+```
+```{r}
+final_df <- final
+final_df$SalePrice <- combined$SalePrice
+```
+
+## Train and test data
+```{r}
+library(caret)
+set.seed(1)
+train_rows <- createDataPartition(y=final_df[,'SalePrice'], list=FALSE, p=.8)
+train_dummy <- final_df[train_rows,]
+test_dummy <- final_df[-train_rows,]
+stopifnot(nrow(train_dummy) + nrow(test_dummy) == nrow(final_df))
+write.csv(train_dummy, "../data/processed/train_data_with_dummy.csv")
+write.csv(test_dummy, "../data/processed/test_data_with_dummy.csv")
+
+train_rows <- createDataPartition(y=combined[,'SalePrice'], list=FALSE, p=.8)
+train <- combined[train_rows,]
+test <- combined[-train_rows,]
+stopifnot(nrow(train) + nrow(test) == nrow(combined))
+write.csv(train, "../data/processed/train_data.csv")
+write.csv(test, "../data/processed/test_data.csv")
+```
+
+# Modelling
+
+## Ridge regression
+
+## Multiple linear regression
+
+### Variable selection
+
+install.packages("randomForest")
+
+http://r-statistics.co/Variable-Selection-and-Importance-With-R.html
+
+## Random forest model
+```{r}
+library(randomForest)
+set.seed(2018)
+fit <- randomForest(SalePrice~.,data = train, ntree = 500, mtry = 8, importance = TRUE)
+fit
+```
+
+### Variable importance plot
+```{r}
+library(dplyr)
+library(ggplot2)
+library(randomForest)
+varImpPlot(fit)
+feat_imp_df<-importance(fit) %>% data.frame() %>% mutate(feature= row.names(.))
+
+ggplot(feat_imp_df, aes(x = reorder(feature,X.IncMSE), 
+                         y = X.IncMSE)) +
+    geom_bar(stat='identity') +
+    coord_flip() +
+  labs(y = "% increase in MSE", x = "Features", title = "Feature importance")
+```
+
+### Top 20 Important variables
+```{r}
+imp_vars <-importance(fit)
+imp_vars <- sort(imp_vars[,1],decreasing = TRUE)
+imp_vars <- imp_vars[1:20]
+imp_vars
+```
+
+### RF model assesment
+```{r}
+pred_values = exp(predict(fit,test[,!names(test) %in% "SalePrice"]))
+actual_values = exp(test$SalePrice)
+rmse_rf <- sqrt(mean((actual_values -pred_values)^2))
+rmse_rf
+
+rss <- sum((pred_values - actual_values) ^ 2)  ## residual sum of squares
+tss <- sum((actual_values - mean(actual_values)) ^ 2)  ## total sum of squares
+rsq_rf <- 1 - rss/tss
+rsq_rf
+```
+
+<!-- ### Multicollinearity check -->
+<!-- ```{r} -->
+<!-- library(car) -->
+<!-- imp_vars <- imp_vars[!names(imp_vars) %in% "MSSubClass"] -->
+<!-- formula <- as.formula(paste("SalePrice", paste(names(imp_vars), collapse = "+"), sep = "~")) -->
+<!-- model <- lm(formula, data = combined) -->
+<!-- summary(model) -->
+<!-- alias(model) -->
+<!-- vif(model) -->
+<!-- ``` -->
+
+<!-- ### Removing multicollinear variables -->
+<!-- ```{r} -->
+<!-- imp_vars <- imp_vars[!names(imp_vars) %in% c("X2ndFlrSF","YearRemodAdd" )] -->
+<!-- formula <- as.formula(paste("SalePrice", paste(names(imp_vars), collapse = "+"), sep = "~")) -->
+<!-- model <- lm(formula, data = combined) -->
+<!-- summary(model) -->
+<!-- alias(model) -->
+<!-- vif(model) -->
+<!-- ``` -->
+
+<!-- ### Final Variable subset -->
+<!-- ```{r} -->
+<!-- final_imp_vars <- names(imp_vars) -->
+<!-- final_imp_vars -->
+<!-- ``` -->
+
+## Gradient boosting
+
+for gradient boosting tutorial 
+https://xgboost.readthedocs.io/en/latest/R-package/xgboostPresentation.html
+
+### Default gradient boosting model
+```{r}
+label_train <- train_dummy$SalePrice
+```
+
+```{r}
+library(xgboost)
+# train and test data for xgb model
+dtrain <- xgb.DMatrix(data = as.matrix(train_dummy[,!names(train_dummy) %in% "SalePrice"]), label = label_train)
+dtest <- xgb.DMatrix(data = as.matrix(test_dummy[,!names(test_dummy) %in% "SalePrice"]))
+default_param<-list(
+        objective = "reg:squarederror",
+        booster = "gbtree",
+        eta=0.3, #default = 0.3
+        gamma=0,
+        max_depth=6, #default=6
+        min_child_weight=1, #default=1
+        subsample=1,
+        colsample_bytree=1
+)
+# cross validation for number of rounds
+xgbcv <- xgb.cv( params = default_param, data = dtrain, nrounds = 500, nfold = 5, showsd = T, stratified = T, print_every_n = 40, early_stopping_rounds = 10, maximize = F)
+```
+
+we got a train-rmse of 0.014953 and a test-rmse of 0.143685.
+
+## Tuning hyperparameters
+```{r}
+set.seed(1)
+grid = expand.grid(
+nrounds = 50,
+eta = c(0.1, 0.05, 0.01),
+max_depth = c(2, 3, 4, 5, 6),
+gamma = 0,
+colsample_bytree=1,
+min_child_weight=c(1, 2, 3, 4 ,5),
+subsample=1
+)
+cv_control <-trainControl(method="cv", number=5)
+calibration_model <- train(x=train_dummy[,!names(train_dummy) %in% "SalePrice"], y=train_dummy$SalePrice, method='xgbTree', trControl= cv_control, tuneGrid=grid) 
+
+```
+
+```{r}
+calibration_model$bestTune
+```
+
+```{r}
+default_param<-list(
+        objective = "reg:squarederror",
+        booster = "gbtree",
+        eta=0.1, #default = 0.3
+        gamma=0,
+        max_depth=5, #default=6
+        min_child_weight=2, #default=1
+        subsample=1,
+        colsample_bytree=1
+)
+# cross validation for number of rounds
+xgbcv <- xgb.cv( params = default_param, data = dtrain, nrounds = 500, nfold = 5, showsd = T, stratified = T, print_every_n = 40, early_stopping_rounds = 10, maximize = F)
+```
+
+After tuning the model parameters we got train-rmse: 0.047392 and test-rmse: 0.137014 which is an improvement on the test-rmse when compared to the default training prarmeter values.
+
+```{r}
+xgb_model <- xgb.train(data = dtrain, params=default_param, nrounds = 61)
+XGBpred <- exp(predict(xgb_model, dtest))
+```
+
+```{r}
+actual <- exp(test_dummy$SalePrice)
+rmse <- sqrt(mean((actual -XGBpred)^2))
+rmse
+
+rss <- sum((XGBpred - actual) ^ 2)  ## residual sum of squares
+tss <- sum((actual - mean(actual)) ^ 2)  ## total sum of squares
+rsq <- 1 - rss/tss
+rsq
+head(data.frame(actual,XGBpred))
+```
+
+# Results
+
