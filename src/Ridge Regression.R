@@ -20,5 +20,3 @@ rsq_rf <- 1 - rss/tss
 rsq_rf
 ridgevar <- varImp(ridge)
 plot(ridge)
-
-bb
