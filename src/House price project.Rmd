@@ -1000,7 +1000,6 @@ final <- cbind(num_df, DFdummies)
 
 ## Transforming SalePrice variable
 ```{r}
-
 Skew(combined$SalePrice)
 qqnorm(combined$SalePrice)
 qqline(combined$SalePrice)
@@ -1073,7 +1072,7 @@ tss <- sum((exp(test_dummy$SalePrice) - mean(exp(test_dummy$SalePrice))) ^ 2)  #
 rsq_rf <- 1 - rss/tss
 rsq_rf
 ridgevar <- varImp(ridge)
-plot(ridge)
+
 ```
 
 ## Multiple linear regression
