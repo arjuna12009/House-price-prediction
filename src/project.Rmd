@@ -1,0 +1,283 @@
+---
+title: "multiple_regression_MATH564"
+author: "Kevin Tchouate Mouofo"
+date: "12/2/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load the data
+
+```{r cars}
+data <- read.csv("/Users/kevinmouofo/Downloads/Math-564-project-main/Data/Processed/train_data.csv", 
+                 sep=",", header = TRUE )
+
+```
+
+## FIT multiple regression model :
+
+```{r echo=TRUE}
+selected_Variables <- c( "GrLivArea",  "Neighborhood", "X1stFlrSF",  "OverallQual", "MSSubClass", "BsmtFinSF1", "LotArea",  "X2ndFlrSF", "FireplaceQu", "GarageCars",  "LotFrontage", "TotBathrooms", "TotRmsAbvGrd", "YearBuilt",  "HouseStyle",  "Fireplaces", "KitchenQual", "YearRemodAdd", "GarageType", "ExterQual" , "BedroomAbvGr", "BsmtQual" , "OpenPorchSF" , "Exterior1st", "OverallCond", "FullBath", "Age", "Exterior2nd", "BsmtFinType1", "MasVnrArea", "SalePrice")
+
+data <- data[, selected_Variables]
+model <- lm(SalePrice~., data=data)
+summary(model)
+```
+
+## VIF analysis :
+
+Why ? To verify there is no strong multicolinearity between the variables.
+
+Correlation matrix
+
+```{r echo=TRUE}
+#library("corrplot")
+num <- colnames(data[,sapply(data, is.numeric)])
+cor(data[,c(num[1:8],"SalePrice")])
+cor(data[,c(num[9:17],"SalePrice")])
+cor(data[,c(num[18:24],"SalePrice")])
+corrplot(cor(data[, num]), type="upper")
+selected_Variables <- c( "GrLivArea",  "Neighborhood", "X1stFlrSF",  "OverallQual", "MSSubClass", "BsmtFinSF1", "LotArea",  "X2ndFlrSF", "FireplaceQu", "GarageCars",  "LotFrontage", "TotBathrooms", "TotRmsAbvGrd", "YearBuilt",  "Fireplaces", "KitchenQual", "YearRemodAdd", "GarageType", "ExterQual" , "BedroomAbvGr", "BsmtQual" , "OpenPorchSF" , "Exterior1st", "OverallCond", "FullBath", "Age", "BsmtFinType1", "MasVnrArea", "SalePrice")
+data <- data[, selected_Variables]
+model <- lm(SalePrice~., data=data)
+summary(model)
+```
+
+
+```{r echo=TRUE}
+#library(car)
+#alias(model)
+vif(model)
+```
+
+As, we can see we have serious multicolinearity issues since maxVIF > 10.
+We will remove X2ndFlrSF, and YearRemodAdd
+
+```{r echo=TRUE}
+selected_Variables <- c( "GrLivArea",  "Neighborhood", "X1stFlrSF",  "OverallQual", "MSSubClass", "BsmtFinSF1", "LotArea", "FireplaceQu", "GarageCars",  "LotFrontage", "TotBathrooms", "TotRmsAbvGrd", "YearBuilt",  "Fireplaces", "KitchenQual", "GarageType", "ExterQual" , "BedroomAbvGr", "BsmtQual" , "OpenPorchSF" , "Exterior1st", "OverallCond", "FullBath", "Age", "BsmtFinType1", "MasVnrArea", "SalePrice")
+data <- data[, selected_Variables]
+model <- lm(SalePrice~., data=data)
+summary(model)
+vif(model)
+```
+
+Ask professor about GVIF*********************
+
+## Residuals against fitted model :
+
+Why ? To see if the normality and error variance assumption are respected.
+
+```{r echo=TRUE}
+nrow(data)
+par(mfrow=c(1,2))
+plot.default(model$fitted.values, model$residuals)
+#boxplot(model$residuals)
+#summary(model)
+```
+
+```{r echo=TRUE}
+stdErr <- summary(model)$sigma
+n=nrow(data)
+ExpVals = sapply(1:n, function(k) stdErr * qnorm((k-.375)/(n+.25)))
+r=cor(ExpVals,sort(model$residuals))
+cat("r =", r)
+```
+The departure from the line on the normal QQ-plot and the low coefficient of correlation
+between ordered residuals and expected values under normality indicate the violation of 
+normality assumption. 
+
+## Residuals against each variable :
+
+Why ? To verify the variance assumption, and to check if second order terms should be added.
+
+```{r echo=TRUE}
+sapply(selected_Variables, FUN=function(x){plot.default(data[,x], model$residuals)})
+```
+
+Need more predicators.
+
+## Cross validation :
+
+Why ? To evaluate the model performance.
+
+```{r echo=TRUE}
+custom<- trainControl(method = "cv",number = 5)
+set.seed(1234)
+
+linearModel <- train(y=train_dummy$SalePrice, x=train_dummy[,!names(train_dummy) %in% "SalePrice"], method = 'lm', trControl =custom)
+linearModel
+summary(linearModel$finalModel)
+```
+
+# plot price range by neighborhood
+
+```{r, echo=TRUE}
+#install.packages("ggmap")
+#install.packages("maps")
+#install.packages("ggplot2")
+#install.packages("dplyr")
+#install.packages("sp")
+#install.packages("ggthemes")
+#install.packages("mapproj")
+#install.packages("statebins")
+
+library("statebins")
+library("dplyr")
+library("ggthemes")
+library("mapproj")
+library('rvest')
+library('tidyr')
+library("sp")
+library("maps")
+library("ggplot2")
+library("ggmap")
+
+register_google(key="AIzaSyCCrZZJBzzS8fHd33ZHhz8BUoncOzGtNgs")
+
+cityStateLatLon <- function(city, state){
+  address <- paste0(city,", ",state)
+  return(geocode(address, output = "latlon"))
+}
+
+Neighborhood <- c("Bloomington Heights", "Bluestem", "Briardale", "Brookside", "Clear Creek", "College Creek", "Crawford", "Edwards", "Gilbert", "Iowa DOT and Rail Road", "Meadow Village", "Mitchell", "North Ames", "Northridge", "Northpark Villa", "Northridge Heights", "Northwest Ames", "Old Town", "South & West of Iowa State University", "Sawyer", "Sawyer West", "Somerset", "Stone Brook", "Timberland", "Veenker")
+
+length(Neighborhood)
+state <- c("Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa", "Iowa","Iowa" )
+
+##test
+#loc <- cityStateLatLon ("Chicago","illinois")
+#loc
+
+#Get lat lon
+addresses <- data.frame(Neighborhood=Neighborhood, state=state)
+lonlats <- apply(addresses, MARGIN = 1, FUN = function(x) cityStateLatLon(x[[1]], x[[2]]))
+lonlat_dataframe <- data.frame(Neighborhood=Neighborhood, state=state, lonlat=as.array(lonlats))
+lons <- c() ; lats <- c()
+lonlat_dataframe$lons <- sapply(lonlat_dataframe$lonlat, FUN=function(x, ln = lons) ln <- append(ln, x$lon))
+lonlat_dataframe$lats <- sapply(lonlat_dataframe$lonlat, FUN=function(x, lt = lats) lt <- append(lt, x$lat))
+lonlat_dataframe$lonlat <- NULL
+lonlat_dataframe
+
+
+#mp <- NULL
+#map<- get_map (location='united states', region == "iowa", zoom=4)
+#mp  <- ggmap(map) + geom_point( aes(x = lonlat_dataframe$lons, y = lonlat_dataframe$lats), data = lonlat_dataframe, color="blue", size = #1.5 )
+#ggplot(filter(gcounty_pop, region == "iowa"))
+#mp
+
+
+#Get the real name of neighborhood
+Pas <- c("Blmngtn"	,"Bluestem","BrDale"	,"BrkSide"	,"ClearCr"	,"CollgCr"	,"Crawfor"	,"Edwards"	,"Gilbert"	,"IDOTRR","MeadowV"	,"Mitchel"	,"Names"	,"NoRidge"	,"NPkVill"	,"NridgHt"	,"NWAmes"	,"OldTown"	,"SWISU"	,"Sawyer"	,"SawyerW",	"Somerst"	,"StoneBr"	,"Timber" ,"Veenker")
+data$TNB <- data$Neighborhood
+sapply(Pas, FUN= function(x){
+  data$TNB <<- gsub(x , Neighborhood[which(Pas==x)], data$TNB)
+})
+sort(unique(data$TNB))
+data$TNB <- gsub("NAmes" , "Northwest Ames", data$TNB)
+data$TNB <- gsub("Crawfordd" , "Crawford" , data$TNB)
+data$TNB <-  gsub("Blueste" , "Bluestem" , data$TNB)
+data$TNB <- gsub("Mitchelll" ,"Mitchell" , data$TNB)
+data$TNB <-  gsub("Timberlandland" ,"Timberland" , data$TNB)
+sort(unique(data$TNB))
+
+
+
+#Get median sale price per neighborhood
+ranking <- c()
+sapply(sort(unique(data$TNB)), FUN = function(x){
+  ranking <<- c(ranking , median(data$SalePrice[data$TNB == x])) 
+})
+res <- sort(unique(data$TNB))
+data_ <-  data.frame(Neighborhood = res, Saleprice = ranking)
+str(data_)
+data_$Neighborhood <-  as.character(data_$Neighborhood)
+data_$Neighborhood
+data_
+
+#Example plot
+gusa <- map_data("state")
+str(gusa)
+us <- gusa[gusa$region == "iowa",]
+us
+
+
+#Get data about region and subregion
+pep2018 <- read.csv("/Users/kevinmouofo/Downloads/PEP_2018_PEPANNRES/PEP_2018_PEPANNRES_with_ann.csv")
+pepvars <- names(pep2018)
+pep2018 <- read.csv("/Users/kevinmouofo/Downloads/PEP_2018_PEPANNRES/PEP_2018_PEPANNRES_with_ann.csv", stringsAsFactors = FALSE,
+                    head = FALSE, skip = 2)
+names(pep2018) <- pepvars
+state_pops <- mutate(pep2018, state = tolower(sub(".*, ", "", GEO.display.label)), pop = respop72018)
+cpop <- select(pep2018,
+               fips = GEO.id2,
+               pop10 = rescen42010,
+               pop18 = respop72018)
+cpop <- mutate(cpop, rpop18 = rank(pop18))
+cpop <- mutate(cpop,
+               pcls18 = cut(pop18, quantile(pop18, seq(0, 1, len = ncls)),
+                            include.lowest = TRUE))
+gcounty <- map_data("county")
+fipstab <-
+    transmute(county.fips, fips, county = sub(":.*", "", polyname))
+fipstab <- unique(fipstab)
+fipstab <-  separate(fipstab, county, c("region", "subregion"), sep = ",")
+gcounty <- left_join(gcounty, fipstab, c("region", "subregion"))
+gcounty_pop <- left_join(gcounty, cpop, "fips")
+cpop <- mutate(cpop, pchange = 100 * (pop18 - pop10) / pop10)
+bins <- c(-Inf, -20, -10, -5, 5, 10, 20, Inf)
+cpop <- mutate(cpop, cpchange = cut(pchange, bins))
+gcounty_pop <- left_join(gcounty, cpop, "fips")
+
+
+
+#sp <- select(state_pops, region = state, pop)
+#gusa_pop <- left_join(gusa, sp, "region")
+
+#head(filter(gusa, region == "virginia"))
+
+#p <- ggplot(us) + coord_map() + ggthemes::theme_map() +
+ # geom_polygon(aes(long, lat, group = group), color = "grey", size = 0.2)
+
+
+#Identify subregion of each each neighborhood
+sort(unique(gcounty_pop$subregion[gcounty_pop$region=="iowa"]))
+gcounty_pop[gcounty_pop$subregion == "adair",]
+gcounty_pop[ gcounty_pop$region=="iowa" & gcounty_pop$subregion == "crawford", ]
+unique(gcounty_pop$long[ gcounty_pop$region=="iowa" & gcounty_pop$subregion == "adair"])
+unique(gcounty_pop$lat[ gcounty_pop$region=="iowa" & gcounty_pop$subregion == "adair"])
+lonlat_dataframe$subregion <- ""
+sapply(unique(gcounty_pop$subregion[gcounty_pop$region=="iowa"]), FUN=function(x){
+ ins <-  point.in.polygon(lonlat_dataframe$lons, lonlat_dataframe$lats, 
+                          gcounty_pop$long[ gcounty_pop$region=="iowa" & gcounty_pop$subregion == x],
+                          gcounty_pop$lat[ gcounty_pop$region=="iowa" & gcounty_pop$subregion == x])
+lonlat_dataframe[ ins == 1,"subregion"] <<-  x  })
+lonlat_dataframe <- lonlat_dataframe[-c(1, 19),]
+lonlat_dataframe
+
+
+#Create dataset of subregion and median saleprice
+lonlat_dataframe2 <- merge(lonlat_dataframe, data_, by="Neighborhood", all.x=TRUE)
+lonlat_dataframe2 <- lonlat_dataframe2[-c(12),]
+lonlat_dataframe2
+gcounty_pop$medianSalePrice <- 0
+sapply(lonlat_dataframe2$subregion, FUN=function(x){
+  gcounty_pop[ gcounty_pop$region=="iowa" & gcounty_pop$subregion==x,"medianSalePrice"] <<-  median(lonlat_dataframe2$Saleprice[which(lonlat_dataframe2$subregion==x)])
+})
+#gcounty_pop[gcounty_pop$region=="iowa",]
+gcounty_pop[is.na(gcounty_pop$medianSalePrice),]
+#gcounty_pop <- gcounty_pop[-c(is.na(gcounty_pop$medianSalePrice)),]
+#gcounty_pop[is.na(gcounty_pop$medianSalePrice[gcounty_pop$region=="iowa"]),]
+max(gcounty_pop$medianSalePrice)
+
+
+
+#plot the graph
+cnames <- aggregate(cbind(long, lat) ~ subregion, data=filter(gcounty_pop, region == "iowa"), FUN=function(x)mean(range(x)))
+piowa <- ggplot(filter(gcounty_pop, region == "iowa")) + coord_map() + ggthemes::theme_map()
+pc_cont_iowa <- geom_polygon(aes(long, lat, group = group, fill=medianSalePrice), color = "grey", size = 0.2)
+piowa + pc_cont_iowa + geom_text(data=cnames, aes(long, lat, label = subregion), size=5) 
+
+```
