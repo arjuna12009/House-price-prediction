@@ -57,7 +57,7 @@ As, we can see we have serious multicolinearity issues since maxVIF > 10.
 We will remove X2ndFlrSF, and YearRemodAdd
 
 ```{r echo=TRUE}
-selected_Variables <- c( "GrLivArea",  "Neighborhood", "X1stFlrSF",  "OverallQual", "MSSubClass", "BsmtFinSF1", "LotArea", "FireplaceQu", "GarageCars",  "LotFrontage", "TotBathrooms", "TotRmsAbvGrd", "YearBuilt",  "Fireplaces", "KitchenQual", "GarageType", "ExterQual" , "BedroomAbvGr", "BsmtQual" , "OpenPorchSF" , "Exterior1st", "OverallCond", "FullBath", "Age", "BsmtFinType1", "MasVnrArea", "SalePrice")
+selected_Variables <- c( "GrLivArea",  "Neighborhood", "X1stFlrSF",  "OverallQual", "MSSubClass", "BsmtFinSF1", "LotArea", "FireplaceQu", "GarageCars",  "LotFrontage", "TotBathrooms", "TotRmsAbvGrd", "YearBuilt",  "Fireplaces", "KitchenQual", "GarageType", "ExterQual" , "BedroomAbvGr", "BsmtQual" , "OpenPorchSF" , "OverallCond", "FullBath", "Age", "BsmtFinType1", "MasVnrArea", "SalePrice")
 data <- data[, selected_Variables]
 model <- lm(SalePrice~., data=data)
 summary(model)
@@ -104,12 +104,38 @@ Need more predicators.
 Why ? To evaluate the model performance.
 
 ```{r echo=TRUE}
+#library("caret")
 custom<- trainControl(method = "cv",number = 5)
 set.seed(1234)
 
-linearModel <- train(y=train_dummy$SalePrice, x=train_dummy[,!names(train_dummy) %in% "SalePrice"], method = 'lm', trControl =custom)
+linearModel <- train(y=data$SalePrice, x=data[,!names(data) %in% "SalePrice"], method = 'lm', trControl =custom)
 linearModel
 summary(linearModel$finalModel)
+```
+
+```{r, echo=TRUE}
+test <- read.csv("/Users/kevinmouofo/Downloads/Math-564-project-main/Data/Processed/test_data.csv", 
+                 sep=",", header = TRUE )
+selected_Variables <- c( "GrLivArea",  "Neighborhood", "X1stFlrSF",  "OverallQual", "MSSubClass", "BsmtFinSF1", "LotArea", "FireplaceQu", "GarageCars",  "LotFrontage", "TotBathrooms", "TotRmsAbvGrd", "YearBuilt",  "Fireplaces", "KitchenQual", "GarageType", "ExterQual" , "BedroomAbvGr", "BsmtQual" , "OpenPorchSF" , "OverallCond", "FullBath", "Age", "BsmtFinType1", "MasVnrArea", "SalePrice")
+test <- test[, selected_Variables]
+pred_values = exp(predict(linearModel$finalModel,test))
+
+n <- nrow(data) + nrow(test)
+k <- ncol(data)
+
+actual_values = exp(test$SalePrice)
+rmse_rf <- sqrt(mean((actual_values -pred_values)^2))
+rmse_rf
+
+rss <- sum((pred_values - actual_values) ^ 2)  ## residual sum of squares
+tss <- sum((actual_values - mean(actual_values)) ^ 2)  ## total sum of squares
+rsq_f <- 1 - rss/tss
+rsq_f
+
+adjr2 <- 1-(((1-rsq_f)*(n-1))/(n-k-1))
+adjr2
+
+
 ```
 
 # plot price range by neighborhood
