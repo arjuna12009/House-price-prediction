@@ -1073,11 +1073,11 @@ rsq_rf <- 1 - rss/tss
 rsq_rf
 ridgevar <- varImp(ridge)
 
+n <- nrow(train_dummy) + nrow(test_dummy)
+k <- ncol(train)
+adjr2 <- 1-(((1-rsq_rf)*(n-1))/(n-k-1))
+adjr2
 ```
-
-## Multiple linear regression
-
-### Variable selection
 
 install.packages("randomForest")
 
@@ -1096,19 +1096,14 @@ fit
 library(dplyr)
 library(ggplot2)
 library(randomForest)
+library(ranger)
 varImpPlot(fit)
-feat_imp_df<-importance(fit) %>% data.frame() %>% mutate(feature= row.names(.))
 
-ggplot(feat_imp_df, aes(x = reorder(feature,X.IncMSE), 
-                         y = X.IncMSE)) +
-    geom_bar(stat='identity') +
-    coord_flip() +
-  labs(y = "% increase in MSE", x = "Features", title = "Feature importance")
 ```
 
 ### Top 20 Important variables
 ```{r}
-imp_vars <-importance(fit)
+imp_vars <-(fit$importance)
 imp_vars <- sort(imp_vars[,1],decreasing = TRUE)
 imp_vars <- imp_vars[1:20]
 imp_vars
@@ -1123,8 +1118,11 @@ rmse_rf
 
 rss <- sum((pred_values - actual_values) ^ 2)  ## residual sum of squares
 tss <- sum((actual_values - mean(actual_values)) ^ 2)  ## total sum of squares
-rsq_rf <- 1 - rss/tss
-rsq_rf
+rsq_f <- 1 - rss/tss
+rsq_f
+
+adjr2 <- 1-(((1-rsq_f)*(n-1))/(n-k-1))
+adjr2
 ```
 
 <!-- ### Multicollinearity check -->
@@ -1166,9 +1164,10 @@ label_train <- train_dummy$SalePrice
 
 ```{r}
 library(xgboost)
+set.seed(1)
 # train and test data for xgb model
-dtrain <- xgb.DMatrix(data = as.matrix(train_dummy[,!names(train_dummy) %in% "SalePrice"]), label = label_train)
-dtest <- xgb.DMatrix(data = as.matrix(test_dummy[,!names(test_dummy) %in% "SalePrice"]))
+train_xgb <- xgb.DMatrix(data = as.matrix(train_dummy[,!names(train_dummy) %in% "SalePrice"]), label = label_train)
+test_xgb <- xgb.DMatrix(data = as.matrix(test_dummy[,!names(test_dummy) %in% "SalePrice"]))
 default_param<-list(
         objective = "reg:squarederror",
         booster = "gbtree",
@@ -1180,10 +1179,10 @@ default_param<-list(
         colsample_bytree=1
 )
 # cross validation for number of rounds
-xgbcv <- xgb.cv( params = default_param, data = dtrain, nrounds = 500, nfold = 5, showsd = T, stratified = T, print_every_n = 40, early_stopping_rounds = 10, maximize = F)
+cv_xgb <- xgb.cv( params = default_param, data = train_xgb, nrounds = 500, nfold = 5, showsd = T, stratified = T, print_every_n = 40, early_stopping_rounds = 10, maximize = F)
 ```
 
-we got a train-rmse of 0.014953 and a test-rmse of 0.143685.
+we got a train-rmse of 0.025476 and a test-rmse of 0.145537.
 
 ## Tuning hyperparameters
 ```{r}
@@ -1212,32 +1211,34 @@ default_param<-list(
         booster = "gbtree",
         eta=0.1, #default = 0.3
         gamma=0,
-        max_depth=5, #default=6
-        min_child_weight=2, #default=1
+        max_depth=6, #default=6
+        min_child_weight=4, #default=1
         subsample=1,
         colsample_bytree=1
 )
 # cross validation for number of rounds
-xgbcv <- xgb.cv( params = default_param, data = dtrain, nrounds = 500, nfold = 5, showsd = T, stratified = T, print_every_n = 40, early_stopping_rounds = 10, maximize = F)
+cv_xgb <- xgb.cv( params = default_param, data = train_xgb, nrounds = 500, nfold = 5, showsd = T, stratified = T, print_every_n = 40, early_stopping_rounds = 10, maximize = F)
 ```
 
-After tuning the model parameters we got train-rmse: 0.047392 and test-rmse: 0.137014 which is an improvement on the test-rmse when compared to the default training prarmeter values.
+After tuning the model parameters we got train-rmse: 0.029925 and test-rmse: 0.136163 which is an improvement on the test-rmse when compared to the default training prarmeter values.
 
 ```{r}
-xgb_model <- xgb.train(data = dtrain, params=default_param, nrounds = 61)
-XGBpred <- exp(predict(xgb_model, dtest))
+model <- xgb.train(data = train_xgb, params=default_param, nrounds = 142)
+pred <- exp(predict(model, test_xgb))
 ```
 
 ```{r}
 actual <- exp(test_dummy$SalePrice)
-rmse <- sqrt(mean((actual -XGBpred)^2))
+rmse <- sqrt(mean((actual -pred)^2))
 rmse
 
-rss <- sum((XGBpred - actual) ^ 2)  ## residual sum of squares
+rss <- sum((pred - actual) ^ 2)  ## residual sum of squares
 tss <- sum((actual - mean(actual)) ^ 2)  ## total sum of squares
 rsq <- 1 - rss/tss
 rsq
-head(data.frame(actual,XGBpred))
+adjr2 <- 1-(((1-rsq)*(n-1))/(n-k-1))
+adjr2
+head(data.frame(actual,pred))
 ```
 
 # Results
